@@ -14,15 +14,23 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Check existing user
+    // Check existing user by email or mobile
     const existingUser = await User.findOne({
-      where: { email },
+      where: {
+        [Op.or]: [
+          { email },
+          { mobile }
+        ],
+      },
     });
 
     if (existingUser) {
       return res.status(400).json({
         status: 0,
-        message: "Email already registered",
+        message:
+          existingUser.email === email
+            ? "Email already registered"
+            : "Mobile already registered",
       });
     }
 
@@ -43,13 +51,14 @@ exports.register = async (req, res, next) => {
       userId: user.id,
     });
 
-    return res.status(200).json({
+    return res.status(201).json({
       status: 1,
       message: "Patient registered successfully",
       data: {
         id: user.id,
         name: user.name,
         email: user.email,
+        mobile: user.mobile,
         role: user.role,
         patientId: patient.id,
       },
@@ -57,12 +66,21 @@ exports.register = async (req, res, next) => {
   } catch (error) {
     console.error("Register Error:", error);
 
+    // Handle DB unique constraint errors
+    if (error.name === "SequelizeUniqueConstraintError") {
+      return res.status(400).json({
+        status: 0,
+        message: error.errors[0].message,
+      });
+    }
+
     return res.status(500).json({
       status: 0,
       message: "Something went wrong",
     });
   }
 };
+
 
 exports.login = async (req, res) => {
   try {
