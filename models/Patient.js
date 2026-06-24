@@ -24,12 +24,54 @@ const Patient = sequelize.define(
       type: DataTypes.DATEONLY,
       allowNull: true,
     },
-
-    address: {
-      type: DataTypes.TEXT,
+    houseNumber: {
+      type: DataTypes.STRING,
       allowNull: true,
     },
+
+    addressLine1: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    addressLine2: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    landmark: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    city: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    state: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    pincode: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    country: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    IsCompleteProfile: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
   },
+
+
+
+
   {
     tableName: "patients",
     timestamps: true,

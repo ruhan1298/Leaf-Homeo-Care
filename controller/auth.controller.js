@@ -207,5 +207,89 @@ exports.ChangePassword = async (req, res) => {
             status: 0,
             message: "Something went wrong",
         });
+    };
+ exports.CompleteProfile = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const userId = req.user.id;
+
+    const {
+      name,
+      email,
+      mobile,
+      gender,
+      dob,
+      houseNumber,
+      addressLine1,
+      addressLine2,
+      landmark,
+      city,
+      state,
+      pincode,
+      country,
+    } = req.body;
+
+    const user = await User.findByPk(userId, { transaction });
+    const patient = await Patient.findOne({
+      where: { userId },
+      transaction,
+    });
+
+    if (!user || !patient) {
+      await transaction.rollback();
+
+      return res.status(404).json({
+        status: 0,
+        message: "User/Patient not found",
+      });
     }
-}
+
+    await user.update(
+      {
+        name,
+        email,
+        mobile,
+      },
+      { transaction }
+    );
+
+    await patient.update(
+      {
+        gender,
+        dob,
+        houseNumber,
+        addressLine1,
+        addressLine2,
+        landmark,
+        city,
+        state,
+        pincode,
+        country,
+        IsCompleteProfile: true,
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+
+    return res.status(200).json({
+      status: 1,
+      message: "Profile completed successfully",
+    });
+  } catch (error) {
+    await transaction.rollback();
+
+    console.error(error);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong",
+    });
+  }
+};
+
+
+
+
+  }

@@ -39,6 +39,10 @@ const Doctor = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    IsExpert:{
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    }
   },
   {
     tableName: "doctors",
