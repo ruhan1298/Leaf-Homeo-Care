@@ -2,6 +2,10 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { User, Doctor, Patient } = require("../models");
 const { Op } = require("sequelize");
+const nodemailer = require("nodemailer");
+const crypto = require("crypto");
+const sequelize = require("../config/database");
+
 
 
 exports.register = async (req, res, next) => {
@@ -148,28 +152,62 @@ exports.login = async (req, res) => {
   }
 };
 exports.GetUser = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const user = await User.findByPk(userId, {
-            attributes: { exclude: ['password'] },
-        });
+  try {
+    const userId = req.user.id;
 
-        return res.status(200).json({
-            status: 1,
-            message: "User retrieved successfully",
-            data: user,
-        });
+    const user = await User.findByPk(userId, {
+      attributes: {
+        exclude: [
+          "password",
+          "resetPasswordToken",
+          "resetPasswordExpires",
+        ],
+      },
+      include: [
+        {
+          model: Patient,
+          as: "patientProfile",
+        },
+        {
+          model: Doctor,
+          as: "doctorProfile",
+        },
+      ],
+    });
 
-    } catch (error) {
-        console.error("GetUser Error:", error); 
-        return res.status(500).json({
-            status: 0,
-            message: "Something went wrong",
-        });
+    if (!user) {
+      return res.status(404).json({
+        status: 0,
+        message: "User not found",
+      });
     }
 
+    const userData = user.toJSON();
 
-}   
+    const data = {
+      ...userData,
+      ...(userData.patientProfile || {}),
+      ...(userData.doctorProfile || {}),
+    };
+
+    delete data.patientProfile;
+    delete data.doctorProfile;
+
+    return res.status(200).json({
+      status: 1,
+      message: "User retrieved successfully",
+      data,
+    });
+
+  } catch (error) {
+    console.error("GetUser Error:", error);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong",
+    });
+  }
+};
 exports.ChangePassword = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -208,11 +246,14 @@ exports.ChangePassword = async (req, res) => {
             message: "Something went wrong",
         });
     };
+  }
  exports.CompleteProfile = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
     const userId = req.user.id;
+    const image = req.file ? req.file.path : null;
+    console.log(image, "Image Path");
 
     const {
       name,
@@ -229,6 +270,8 @@ exports.ChangePassword = async (req, res) => {
       pincode,
       country,
     } = req.body;
+    console.log(req.body,"BoDY");
+    
 
     const user = await User.findByPk(userId, { transaction });
     const patient = await Patient.findOne({
@@ -250,6 +293,7 @@ exports.ChangePassword = async (req, res) => {
         name,
         email,
         mobile,
+        image,
       },
       { transaction }
     );
@@ -281,6 +325,173 @@ exports.ChangePassword = async (req, res) => {
     await transaction.rollback();
 
     console.error(error);
+    console.log(error);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong",
+    });
+  }
+};
+
+exports.ForgetPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({
+      where: { email }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        status: 0,
+        message: "User not found"
+      });
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+
+    const expiry = new Date(
+      Date.now() + 10 * 60 * 1000
+    );
+
+    await user.update({
+      resetPasswordToken: otp,
+      resetPasswordExpires: expiry
+    });
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Password Reset OTP",
+      text: `Your OTP is ${otp}. It is valid for 10 minutes.`
+    });
+
+    return res.status(200).json({
+      status: 1,
+      message: "OTP sent successfully"
+    });
+
+  } catch (err) {
+    console.log(err);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong"
+    });
+  }
+};
+
+exports.VerifyOTP = async (req, res) => {
+  try {
+
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({
+      where: { email }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        status: 0,
+        message: "User not found"
+      });
+    }
+
+    if (
+      user.resetPasswordToken !== otp
+    ) {
+      return res.status(400).json({
+        status: 0,
+        message: "Invalid OTP"
+      });
+    }
+
+    if (
+      new Date() >
+      user.resetPasswordExpires
+    ) {
+      return res.status(400).json({
+        status: 0,
+        message: "OTP expired"
+      });
+    }
+
+    return res.status(200).json({
+      status: 1,
+      message: "OTP verified successfully"
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong"
+    });
+
+  }
+};
+exports.ResetPassword = async (req, res) => {
+  try {
+    const { email, otp, password } = req.body;
+
+    if (!email || !otp || !password) {
+      return res.status(400).json({
+        status: 0,
+        message: "All fields are required",
+      });
+    }
+
+    const user = await User.findOne({
+      where: { email },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        status: 0,
+        message: "User not found",
+      });
+    }
+
+    if (user.resetPasswordToken !== otp) {
+      return res.status(400).json({
+        status: 0,
+        message: "Invalid OTP",
+      });
+    }
+
+    if (new Date() > user.resetPasswordExpires) {
+      return res.status(400).json({
+        status: 0,
+        message: "OTP has expired",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await user.update({
+      password: hashedPassword,
+      resetPasswordToken: null,
+      resetPasswordExpires: null,
+    });
+
+    return res.status(200).json({
+      status: 1,
+      message: "Password reset successfully",
+    });
+
+  } catch (error) {
+    console.error(error);
 
     return res.status(500).json({
       status: 0,
@@ -292,4 +503,102 @@ exports.ChangePassword = async (req, res) => {
 
 
 
+
+
+    exports.DeleteUser = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: 0,
+        message: "User not found",
+      });
+    }
+
+    // Doctor
+    if (user.role === "doctor") {
+      const doctor = await Doctor.findOne({
+        where: { userId },
+      });
+
+      if (doctor) {
+        const appointments = await Appointment.findAll({
+          where: { doctorId: doctor.id },
+          attributes: ["id"],
+        });
+
+        const appointmentIds = appointments.map(
+          (appointment) => appointment.id
+        );
+
+        if (appointmentIds.length > 0) {
+          await Payment.destroy({
+            where: {
+              appointmentId: appointmentIds,
+            },
+          });
+
+          await Appointment.destroy({
+            where: {
+              id: appointmentIds,
+            },
+          });
+        }
+
+        await doctor.destroy();
+      }
+    }
+
+    // Patient
+    if (user.role === "patient") {
+      const patient = await Patient.findOne({
+        where: { userId },
+      });
+
+      if (patient) {
+        const appointments = await Appointment.findAll({
+          where: { patientId: patient.id },
+          attributes: ["id"],
+        });
+
+        const appointmentIds = appointments.map(
+          (appointment) => appointment.id
+        );
+
+        if (appointmentIds.length > 0) {
+          await Payment.destroy({
+            where: {
+              appointmentId: appointmentIds,
+            },
+          });
+
+          await Appointment.destroy({
+            where: {
+              id: appointmentIds,
+            },
+          });
+        }
+
+        await patient.destroy();
+      }
+    }
+
+    await user.destroy();
+
+    return res.status(200).json({
+      status: 1,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong",
+    });
   }
+};
+  

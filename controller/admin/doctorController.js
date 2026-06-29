@@ -94,23 +94,54 @@ exports.AddDoctor = async (req, res, next) => {
   }
 
 }
+
 exports.GetDoctors = async (req, res, next) => {
   try {
-    const doctors = await Doctor.findAll({
-include: [
-  {
-    model: User,
-    as: "user",
-    attributes: ["name", "email", "mobile"],
-  },
-],
+    const { page = 1, limit = 10, search = "" } = req.body;
+
+    const offset = (page - 1) * limit;
+
+    const where = {};
+
+    if (search) {
+      where[Op.or] = [
+        { specialization: { [Op.iLike]: `%${search}%` } },
+        { qualification: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    const { count, rows } = await Doctor.findAndCountAll({
+      where,
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["name", "email", "mobile"],
+          where: search
+            ? {
+                [Op.or]: [
+                  { name: { [Op.iLike]: `%${search}%` } },
+                  { email: { [Op.iLike]: `%${search}%` } },
+                  { mobile: { [Op.iLike]: `%${search}%` } },
+                ],
+              }
+            : undefined,
+        },
+      ],
+      limit: Number(limit),
+      offset,
       order: [["id", "DESC"]],
     });
 
     return res.status(200).json({
       status: 1,
       message: "Doctors fetched successfully",
-      data: doctors,
+      data: {
+        doctors: rows,
+        totalRecords: count,
+        currentPage: Number(page),
+        totalPages: Math.ceil(count / limit),
+      },
     });
   } catch (error) {
     next(error);

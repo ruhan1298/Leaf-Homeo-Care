@@ -5,7 +5,7 @@ const doctorController = require("../../controller/admin/doctorController");
 const patientController = require("../../controller/admin/patientController");
 
 router.post("/add", authmiddleware, doctorController.AddDoctor);
-router.get("/getdoctors", authmiddleware, doctorController.GetDoctors);
+router.post("/getdoctors", authmiddleware, doctorController.GetDoctors);
 router.post("/delete", authmiddleware, doctorController.DeleteDoctor);
 router.post("/updatedoctor", authmiddleware, doctorController.UpdateDoctor);
 
