@@ -17,7 +17,7 @@ require("./models");
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 var authRouter = require('./routes/auth');
-var adminRouter = require('./routes/admin/adminRoute');
+var adminRouter = require('./routes/Admin/adminRoute');
  const cors = require("cors");
 
 var app = express();
