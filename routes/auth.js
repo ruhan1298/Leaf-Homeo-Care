@@ -12,7 +12,7 @@ router.post('/complete-profile', upload.single('image'), authmiddleware, authCon
 router.post('/forgot-password', authController.ForgetPassword);
 router.post('/verify-otp', authController.VerifyOTP);
 router.post('/reset-password', authController.ResetPassword);
-router.delete('/delete-user', authmiddleware, authController.DeleteUser);
+router.get('/delete-user', authmiddleware, authController.DeleteUser);
 
 
 module.exports = router;

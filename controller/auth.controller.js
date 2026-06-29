@@ -1,10 +1,11 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { User, Doctor, Patient } = require("../models");
+const { User, Doctor, Patient,Appointment,Payment } = require("../models");
 const { Op } = require("sequelize");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const sequelize = require("../config/database");
+
 
 
 
