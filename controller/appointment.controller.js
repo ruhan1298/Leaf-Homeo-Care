@@ -10,6 +10,7 @@ const Notification = require("../models/Notification");
 exports.AppointmentBooking = async (req, res, next) => {
   try {
     const userId = req.user.id;
+    console.log("Patient ID from token:", userId); // Log the patient ID for debugging
 
     console.log("Patient ID from token:", userId); // Log the patient ID for debugging
     const patient = await Patient.findOne({
@@ -432,7 +433,7 @@ exports.CancelAppointment = async (req, res) => {
       message: "Appointment cancelled successfully",
       data: appointment
     });
-    
+
 
 
     
