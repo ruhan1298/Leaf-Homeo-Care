@@ -77,7 +77,7 @@ await Notification.create({
       const notifications = doctors.map((doctor) => ({
         userId: doctor.userId,
 
-        senderId: patientId,
+        senderId: userId,
 
         title: "New Appointment Request",
 
