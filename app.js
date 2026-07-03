@@ -15,9 +15,11 @@ require("./models");
 
 
 var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
 var authRouter = require('./routes/auth');
 var adminRouter = require('./routes/Admin/adminRoute');
+var PatientRouter = require('./routes/patient');
+var appointmentRouter = require('./routes/appointment');
+var doctorRouter = require('./routes/doctor');
  const cors = require("cors");
 
 var app = express();
@@ -35,9 +37,11 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
-app.use('/users', usersRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/admin", adminRouter);// catch 404 and forward to error handler
+app.use("/api/v1/patient", PatientRouter);
+app.use("/api/v1/appointment", appointmentRouter);
+app.use("/api/v1/doctor", doctorRouter);
 
 app.use(function(req, res, next) {
   next(createError(404));

@@ -99,7 +99,7 @@ exports.GetDoctors = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, search = "" } = req.body;
 
-    const offset = (page - 1) * limit;
+    const offset = (page - 1) * Number(limit);
 
     const where = {};
 
@@ -107,31 +107,44 @@ exports.GetDoctors = async (req, res, next) => {
       where[Op.or] = [
         { specialization: { [Op.iLike]: `%${search}%` } },
         { qualification: { [Op.iLike]: `%${search}%` } },
+        { bio: { [Op.iLike]: `%${search}%` } },
+     
+      
+
+        { "$user.name$": { [Op.iLike]: `%${search}%` } },
+        { "$user.email$": { [Op.iLike]: `%${search}%` } },
+        { "$user.mobile$": { [Op.iLike]: `%${search}%` } },
+          ...( !isNaN(search)
+      ? [
+          { consultationFee: Number(search) },
+          { experience: Number(search) }
+        ]
+      : []
+  )
       ];
     }
 
     const { count, rows } = await Doctor.findAndCountAll({
       where,
+
       include: [
         {
           model: User,
           as: "user",
           attributes: ["name", "email", "mobile"],
-          where: search
-            ? {
-                [Op.or]: [
-                  { name: { [Op.iLike]: `%${search}%` } },
-                  { email: { [Op.iLike]: `%${search}%` } },
-                  { mobile: { [Op.iLike]: `%${search}%` } },
-                ],
-              }
-            : undefined,
+          required: false,
         },
       ],
+
+      distinct: true,
+
       limit: Number(limit),
       offset,
+
       order: [["id", "DESC"]],
     });
+
+    console.log("Doctors fetched:", rows);
 
     return res.status(200).json({
       status: 1,
@@ -180,6 +193,7 @@ exports.DeleteDoctor = async (req, res, next) => {
 };
 exports.UpdateDoctor = async (req, res, next) => {
   try {
+    const image = req.file ? req.file.path : null;
     const {
       doctorId,
       name,
@@ -191,16 +205,25 @@ exports.UpdateDoctor = async (req, res, next) => {
       consultationFee,
       bio,
       IsExpert,
+
     } = req.body;
+    console.log(req.body,"BODY");
+    console.log(image,"IMAGE");
 
-    const doctor = await Doctor.findByPk(doctorId);
+const doctor = await Doctor.findOne({
+  where: {
+    userId: doctorId
+  }
 
+});
+console.log(doctor,"DOCTOR");
     if (!doctor) {
       return res.status(404).json({
         status: 0,
-        message: "Doctor not found",
+        message: "Doctor not found"
       });
     }
+
 
     const user = await User.findByPk(doctor.userId);
 
@@ -215,6 +238,7 @@ exports.UpdateDoctor = async (req, res, next) => {
       name,
       email,
       mobile,
+      image: image || user.image, // Update image only if a new one is provided
     });
 
     await doctor.update({

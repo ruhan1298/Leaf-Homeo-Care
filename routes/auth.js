@@ -13,6 +13,6 @@ router.post('/forgot-password', authController.ForgetPassword);
 router.post('/verify-otp', authController.VerifyOTP);
 router.post('/reset-password', authController.ResetPassword);
 router.get('/delete-user', authmiddleware, authController.DeleteUser);
-
+router.get('/get-notifications', authmiddleware, authController.NotificationList);
 
 module.exports = router;

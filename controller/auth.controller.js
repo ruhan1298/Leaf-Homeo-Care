@@ -5,6 +5,9 @@ const { Op } = require("sequelize");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const sequelize = require("../config/database");
+const JWT_SECRET = process.env.JWT_SECRET;
+const Sequelize = require("sequelize");
+const Notification = require("../models/Notification");
 
 
 
@@ -501,8 +504,73 @@ exports.ResetPassword = async (req, res) => {
   }
 };
 
+exports.NotificationList = async (req, res, next) => {
+ const userId = req.user.id;
+  try {
+    const notifications = await Notification.findAll({
+      where: {
+        userId: userId,
+      },
+      order: [["createdAt", "DESC"]],
+    });
+    await Notification.update(
+      { isRead: true },
+      {
+        where: {
+          userId: userId,
+          isRead: false,
+        },
+      }
+    );
+    return res.status(200).json({
+      status: 1,
+      message: "Notifications retrieved successfully",
+      data: notifications
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong"
+    });
+  }
+};
+  
+exports.NotificationList = async (req, res) => {
+  try {
+    const userId = req.user.id;
 
+    await Notification.update(
+      { isRead: true },
+      {
+        where: {
+          userId,
+          isRead: false,
+        },
+      }
+    );
 
+    const notifications = await Notification.findAll({
+      where: {
+        userId,
+      },
+      order: [["createdAt", "DESC"]],
+    });
+
+    return res.status(200).json({
+      status: 1,
+      message: "Notifications retrieved successfully",
+      data: notifications,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong",
+    });
+  }
+};
 
 
 
@@ -602,4 +670,3 @@ exports.ResetPassword = async (req, res) => {
     });
   }
 };
-  
