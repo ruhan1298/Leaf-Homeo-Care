@@ -371,6 +371,8 @@ exports.ForgetPassword = async (req, res) => {
         pass: process.env.EMAIL_PASS
       }
     });
+    console.log(process.env.EMAIL_USER);
+console.log(process.env.EMAIL_PASS ? "PASS OK" : "PASS MISSING");
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
