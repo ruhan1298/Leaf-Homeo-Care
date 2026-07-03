@@ -55,7 +55,7 @@ if(requestType === "specific_doctor") {
       const doctor = await Doctor.findByPk(doctorId);
 await Notification.create({
         userId: doctor.userId,
-        senderId: patientId,
+        senderId: userId,
 
         title: "New Appointment Request",
 
