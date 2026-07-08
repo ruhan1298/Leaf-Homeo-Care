@@ -1,12 +1,127 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { User, Doctor, Patient,Appointment,Payment } = require("../models");
+const { User, Doctor, Patient,Appointment,Payment, Availability } = require("../models");
 const { Op } = require("sequelize");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const JWT_SECRET = process.env.JWT_SECRET;
 const Sequelize = require("sequelize");
 const Notification = require("../models/Notification");
+
+exports.AvaiblitySlots = async (req,res,next ) =>{
+  try {
+    const { doctorId, date } = req.body;
+    if (!doctorId || !date) {
+      return res.status(400).json({
+        status: 0,
+        message: "doctorId and date are required"
+      });
+    }
+
+    const selectedDate = new Date(date);
+
+    const dayOfWeek = selectedDate
+      .toLocaleDateString("en-US", {
+        weekday: "long",
+      })
+      .toLowerCase();
+
+    const availability = await Availability.findAll({
+      where: {
+        doctorId,
+        dayOfWeek,
+        IsAvailable: true
+      }
+    });
+
+    if (!availability.length) {
+      return res.status(200).json({
+        status: 1,
+        slots: []
+      });
+    }
+
+    const startOfDay = `${date} 00:00:00`;
+    const endOfDay = `${date} 23:59:59`;
+
+    const appointments = await Appointment.findAll({
+      where: {
+        doctorId,
+        status: {
+          [Op.notIn]: ["cancelled"]
+        },
+        appointmentDateTime: {
+          [Op.between]: [startOfDay, endOfDay]
+        }
+      }
+    });
+
+    const bookedSlots = appointments.map((a) => {
+
+      const d = new Date(a.appointmentDateTime);
+
+      return d.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+
+    });
+
+    const slots = [];
+
+    availability.forEach((item) => {
+
+      let current = new Date(
+        `2000-01-01T${item.startTime}`
+      );
+
+      const end = new Date(
+        `2000-01-01T${item.endTime}`
+      );
+
+      while (current < end) {
+
+        const slot = current.toLocaleTimeString(
+          "en-GB",
+          {
+            hour: "2-digit",
+            minute: "2-digit"
+          }
+        );
+
+        slots.push({
+          time: slot,
+          available: !bookedSlots.includes(slot)
+        });
+
+        current.setMinutes(
+          current.getMinutes() +
+          item.slotDuration
+        );
+
+      }
+
+    });
+
+    return res.status(200).json({
+      status: 1,
+      date,
+      dayOfWeek,
+      slots
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    return res.status(500).json({
+      status: 0,
+      message: error.message
+    });
+
+  }
+
+}
 exports.AppointmentBooking = async (req, res, next) => {
   try {
     const userId = req.user.id;

@@ -3,9 +3,67 @@ const { Op } = require("sequelize");
 const nodemailer = require("nodemailer");
 const JWT_SECRET = process.env.JWT_SECRET;
 const Sequelize = require("sequelize");
-const { User, Doctor, Patient, Appointment, Payment } = require("../../models");
+
+const { User, Doctor, Patient, Appointment, Payment ,Availability} = require("../../models");
 
 
+exports.AddAvailability = async (req, res) => {
+  try {
+
+    const userId = req.user.id;
+
+    const doctor = await Doctor.findOne({
+      where: {
+        userId
+      }
+    });
+
+    if (!doctor) {
+      return res.status(404).json({
+        status: 0,
+        message: "Doctor not found"
+      });
+    }
+
+    const { availability } = req.body;
+
+    if (!availability || !Array.isArray(availability)) {
+      return res.status(400).json({
+        status: 0,
+        message: "Availability array is required"
+      });
+    }
+
+    const availabilityData = availability.map(item => ({
+      doctorId: doctor.id,
+      dayOfWeek: item.dayOfWeek,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      slotDuration: item.slotDuration || 30,
+      IsAvailable: true
+    }));
+
+    const result = await Availability.bulkCreate(
+      availabilityData
+    );
+
+    return res.status(201).json({
+      status: 1,
+      message: "Availability added successfully",
+      data: result
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong"
+    });
+
+  }
+};
 exports.AcceptAppointment = async (req, res) => {
   try {
 

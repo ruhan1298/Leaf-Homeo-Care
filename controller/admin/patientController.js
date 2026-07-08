@@ -2,36 +2,63 @@
 const Patient = require('../../models/Patient');
 const User = require('../../models/User');
 const { Op } = require('sequelize');
+const Sequelize = require('sequelize');
 
 exports.GetAllPatients = async (req, res, next) => {
   try {
-    const page = Number(req.body.page) || 1;
-    const limit = Number(req.body.limit) || 10;
+    const { page = 1, limit = 10, search = "" } = req.body;
 
-    const offset = (page - 1) * limit;
+    const offset = (page - 1) * Number(limit);
+
+    const where = {};
+
+    if (search) {
+      where[Op.or] = [
+Sequelize.where(
+      Sequelize.cast(Sequelize.col('gender'), 'TEXT'),
+      { [Op.iLike]: `%${search}%` }
+    ),        { country: { [Op.iLike]: `%${search}%` } },
+        { city: { [Op.iLike]: `%${search}%` } },
+     
+      
+
+        { "$user.name$": { [Op.iLike]: `%${search}%` } },
+        { "$user.email$": { [Op.iLike]: `%${search}%` } },
+        { "$user.mobile$": { [Op.iLike]: `%${search}%` } },
+
+      ];
+    }
 
     const { count, rows } = await Patient.findAndCountAll({
+      where,
+
       include: [
         {
           model: User,
-          attributes: ["id", "name", "email", "mobile"],
+          as: "user",
+          attributes: ["name", "email", "mobile"],
+          required: false,
         },
       ],
-      order: [["createdAt", "DESC"]],
-      limit,
-      offset,
+
       distinct: true,
+
+      limit: Number(limit),
+      offset,
+
+      order: [["id", "DESC"]],
     });
+
+    console.log("patient fetched:", rows);
 
     return res.status(200).json({
       status: 1,
       message: "Patients fetched successfully",
-      data: rows,
-      pagination: {
+      data: {
+        patients: rows,
         totalRecords: count,
-        currentPage: page,
+        currentPage: Number(page),
         totalPages: Math.ceil(count / limit),
-        limit,
       },
     });
   } catch (error) {

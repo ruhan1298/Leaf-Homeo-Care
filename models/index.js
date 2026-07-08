@@ -4,6 +4,7 @@ const Patient = require("./Patient");
 const Appointment = require("./Appointment");
 const Payment = require("./Payment");
 const Notification = require("./Notification");
+const Availability = require("./Availability"); 
 /*
 
  User Relations with Doctor 
@@ -91,6 +92,13 @@ Notification.belongsTo(User, {
   foreignKey: "senderId",
   as: "sender",
 });
+Doctor.hasMany(Availability,{
+   foreignKey:"doctorId"
+})
+
+Availability.belongsTo(Doctor,{
+   foreignKey:"doctorId"
+})
 
 console.log("✅ Model Relations Loaded");
 
@@ -101,4 +109,6 @@ module.exports = {
   Appointment,
   Payment,
   Notification,
+  Availability
+
 };

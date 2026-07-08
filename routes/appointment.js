@@ -4,6 +4,7 @@ const appointmentController = require('../controller/appointment.controller');
 const patientController = require('../controller/patient.controller');
 const authMiddleware = require('../middleware/auth');
 
+router.post('/get-slot',authMiddleware,appointmentController.AvaiblitySlots)
 router.post('/book-appointment', authMiddleware, appointmentController.AppointmentBooking);
 router.get('/upcoming-appointments', authMiddleware, appointmentController.UpcomingAppointments);
 router.post('/my-appointments', authMiddleware, appointmentController.myAppointments);

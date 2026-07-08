@@ -131,7 +131,7 @@ exports.GetDoctors = async (req, res, next) => {
         {
           model: User,
           as: "user",
-          attributes: ["name", "email", "mobile"],
+          attributes: ["name", "email", "mobile","image"],
           required: false,
         },
       ],
