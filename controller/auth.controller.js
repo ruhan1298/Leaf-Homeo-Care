@@ -250,7 +250,72 @@ exports.ChangePassword = async (req, res) => {
             message: "Something went wrong",
         });
     };
+  };
+
+exports.UpdateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, email, mobile } = req.body;
+
+    if (!name || !email || !mobile) {
+      return res.status(400).json({
+        status: 0,
+        message: "Name, email and mobile are required",
+      });
+    }
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: 0,
+        message: "User not found",
+      });
+    }
+
+    // Check if email or mobile already exists for another user
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [
+          { email },
+          { mobile }
+        ],
+        id: { [Op.ne]: userId }
+      },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        status: 0,
+        message: existingUser.email === email ? "Email already exists" : "Mobile already exists",
+      });
+    }
+
+    await user.update({
+      name,
+      email,
+      mobile,
+    });
+
+    return res.status(200).json({
+      status: 1,
+      message: "Profile updated successfully",
+      data: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        mobile: user.mobile,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("UpdateProfile Error:", error);
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong",
+    });
   }
+};
  exports.CompleteProfile = async (req, res) => {
   const transaction = await sequelize.transaction();
 

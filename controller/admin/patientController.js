@@ -36,7 +36,7 @@ Sequelize.where(
         {
           model: User,
           as: "user",
-          attributes: ["name", "email", "mobile"],
+          attributes: ["name", "email", "mobile", "image"],
           required: false,
         },
       ],
@@ -68,6 +68,9 @@ Sequelize.where(
 exports.DeletePatient = async (req, res, next) => {
   try {
     const { patientId } = req.body;
+    console.log(patientId);
+    
+    
 
 const patient = await Patient.findByPk(patientId);
     if (!patient) {
@@ -77,7 +80,12 @@ const patient = await Patient.findByPk(patientId);
       });
     }
 
+    console.log(patient);
+    
     const userId = patient.userId;
+    console.log(userId,"user");
+    
+
 
     await patient.destroy();
 
@@ -98,7 +106,7 @@ const patient = await Patient.findByPk(patientId);
 exports.UpdatePatient = async (req, res, next) => {
   try {
     const {
-      patientId,
+      id,
       name,
       email,
       mobile,
@@ -117,25 +125,26 @@ exports.UpdatePatient = async (req, res, next) => {
 
       
     } = req.body;
+    console.log(req.body,"BODY");
+    
 
-    const patient = await Patient.findByPk(patientId);
+    const patient = await Patient.findByPk(id);
 
-    if (!patient) {
-      return res.status(404).json({
-        status: 0,
-        message: "Patient not found",
-      });
-    }
+if (!patient) {
+  return res.status(404).json({
+    status: 0,
+    message: "Patient not found",
+  });
+}
 
-    const user = await User.findByPk(patient.userId);
+const user = await User.findByPk(patient.userId);
 
-    if (!user) {
-      return res.status(404).json({
-        status: 0,
-        message: "User not found",
-      });
-    }
-
+if (!user) {
+  return res.status(404).json({
+    status: 0,
+    message: "User not found",
+  });
+}
     await user.update({
       name,
       email,
@@ -160,6 +169,7 @@ exports.UpdatePatient = async (req, res, next) => {
       message: "Patient updated successfully",
     });
   } catch (error) {
+    console.log(error,"errpr")
     next(error);
   }
 };
