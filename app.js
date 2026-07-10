@@ -1,5 +1,7 @@
 var createError = require('http-errors');
 var express = require('express');
+console.log(express);
+console.log("RAW =", express.raw);
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
@@ -10,6 +12,8 @@ const Patient = require("./models/Patient");
 const Appointment = require("./models/Appointment");
 const Payment = require("./models/Payment");
 // const Prescription = require("./models/Prescription");
+const bodyParser = require("body-parser");
+
 require("./models");
 
 
@@ -34,10 +38,17 @@ app.set('view engine', 'jade');
 
 app.use(cors());
 app.use(logger('dev'));
+
+
+
+
+
 app.use(
   "/api/v1/payment/webhook",
-  express.raw({ type: "application/json" })
+  bodyParser.raw({ type: "application/json" })
 );
+
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
