@@ -15,38 +15,33 @@ const Notification = sequelize.define(
         },
         title: {
             type: DataTypes.STRING,
-            allowNull: false,   
+            allowNull: false,
         },
         message: {
             type: DataTypes.TEXT,
             allowNull: false,
-        },  
+        },
         senderId: {
             type: DataTypes.INTEGER,
-            allowNull: false,   
+            allowNull: false,
         },
         referenceId: {
             type: DataTypes.INTEGER,
             allowNull: true,
         },
-
-        
-isRead: {
-
+        type: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        isRead: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,
         },
-
         createdAt: {
             type: DataTypes.DATE,
             allowNull: false,
             defaultValue: DataTypes.NOW,
         },
-            type: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-
     },
       {
     tableName: "Notifications",

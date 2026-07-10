@@ -145,6 +145,27 @@ if (!user) {
     message: "User not found",
   });
 }
+
+    // Check if email or mobile already exists for another user
+    if (email || mobile) {
+      const existingUser = await User.findOne({
+        where: {
+          [Op.or]: [
+            ...(email ? [{ email }] : []),
+            ...(mobile ? [{ mobile }] : []),
+          ],
+          id: { [Op.ne]: patient.userId },
+        },
+      });
+
+      if (existingUser) {
+        return res.status(400).json({
+          status: 0,
+          message: existingUser.email === email ? "Email already exists" : "Mobile already exists",
+        });
+      }
+    }
+
     await user.update({
       name,
       email,

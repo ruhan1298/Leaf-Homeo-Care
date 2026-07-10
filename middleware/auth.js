@@ -6,15 +6,16 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 const authMiddleware = (req, res, next) => {
   try {
-    const token = req.headers.authorization;
+    const authHeader = req.headers.authorization;
 
-    if (!token) {
+    if (!authHeader) {
       return res.status(401).json({
         status: 0,
         message: "Token required",
       });
     }
 
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
     const decoded = jwt.verify(token, JWT_SECRET);
 
     req.user = {

@@ -71,6 +71,7 @@ exports.register = async (req, res, next) => {
         mobile: user.mobile,
         role: user.role,
         patientId: patient.id,
+        IsCompleteProfile: patient.IsCompleteProfile,
       },
     });
   } catch (error) {
@@ -105,6 +106,16 @@ exports.login = async (req, res) => {
 
     const user = await User.findOne({
       where: { email },
+      include: [
+        {
+          model: Patient,
+          as: "patientProfile",
+        },
+        {
+          model: Doctor,
+          as: "doctorProfile",
+        },
+      ],
     });
 
     if (!user) {
@@ -134,16 +145,25 @@ exports.login = async (req, res) => {
       }
     );
 
+    const userData = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      role: user.role,
+      token,
+    };
+
+    // Add IsCompleteProfile for patients
+    if (user.role === "patient" && user.patientProfile) {
+      userData.IsCompleteProfile = user.patientProfile.IsCompleteProfile;
+      userData.patientId = user.patientProfile.id;
+    }
+
     return res.status(200).json({
       status: 1,
       message: "Login successful",
-      data: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token,
-      },
+      data: userData,
     });
 
   } catch (error) {
@@ -249,24 +269,47 @@ exports.ChangePassword = async (req, res) => {
             status: 0,
             message: "Something went wrong",
         });
-    };
+    }
   };
 
 exports.UpdateProfile = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
   try {
     const userId = req.user.id;
-    const { name, email, mobile } = req.body;
+    const {
+      name,
+      email,
+      mobile,
+      gender,
+      dob,
+      houseNumber,
+      addressLine1,
+      addressLine2,
+      landmark,
+      city,
+      state,
+      pincode,
+      country,
+    } = req.body;
+    const image = req.file ? req.file.filename : null;
 
     if (!name || !email || !mobile) {
+      await transaction.rollback();
       return res.status(400).json({
         status: 0,
         message: "Name, email and mobile are required",
       });
     }
 
-    const user = await User.findByPk(userId);
+    const user = await User.findByPk(userId, { transaction });
+    const patient = await Patient.findOne({
+      where: { userId },
+      transaction,
+    });
 
     if (!user) {
+      await transaction.rollback();
       return res.status(404).json({
         status: 0,
         message: "User not found",
@@ -274,28 +317,62 @@ exports.UpdateProfile = async (req, res) => {
     }
 
     // Check if email or mobile already exists for another user
-    const existingUser = await User.findOne({
-      where: {
-        [Op.or]: [
-          { email },
-          { mobile }
-        ],
-        id: { [Op.ne]: userId }
-      },
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        status: 0,
-        message: existingUser.email === email ? "Email already exists" : "Mobile already exists",
+    if (email || mobile) {
+      const existingUser = await User.findOne({
+        where: {
+          [Op.or]: [
+            ...(email ? [{ email }] : []),
+            ...(mobile ? [{ mobile }] : []),
+          ],
+          id: { [Op.ne]: userId },
+        },
+        transaction,
       });
+
+      if (existingUser) {
+        await transaction.rollback();
+        return res.status(400).json({
+          status: 0,
+          message: existingUser.email === email ? "Email already exists" : "Mobile already exists",
+        });
+      }
     }
 
-    await user.update({
-      name,
-      email,
-      mobile,
-    });
+    // Update User
+    await user.update(
+      {
+        name,
+        email,
+        mobile,
+        ...(image && { image }),
+      },
+      { transaction }
+    );
+
+    // Update Patient if exists
+    if (patient) {
+      await patient.update(
+        {
+          ...(gender !== undefined && { gender }),
+          ...(dob !== undefined && { dob }),
+          ...(houseNumber !== undefined && { houseNumber }),
+          ...(addressLine1 !== undefined && { addressLine1 }),
+          ...(addressLine2 !== undefined && { addressLine2 }),
+          ...(landmark !== undefined && { landmark }),
+          ...(city !== undefined && { city }),
+          ...(state !== undefined && { state }),
+          ...(pincode !== undefined && { pincode }),
+          ...(country !== undefined && { country }),
+          // Mark profile as complete if required fields are filled
+          ...(gender && dob && addressLine1 && city && state && pincode && country
+            ? { IsCompleteProfile: true }
+            : {}),
+        },
+        { transaction }
+      );
+    }
+
+    await transaction.commit();
 
     return res.status(200).json({
       status: 1,
@@ -306,9 +383,11 @@ exports.UpdateProfile = async (req, res) => {
         email: user.email,
         mobile: user.mobile,
         role: user.role,
+        IsCompleteProfile: patient?.IsCompleteProfile || false,
       },
     });
   } catch (error) {
+    await transaction.rollback();
     console.error("UpdateProfile Error:", error);
     return res.status(500).json({
       status: 0,
@@ -316,13 +395,12 @@ exports.UpdateProfile = async (req, res) => {
     });
   }
 };
- exports.CompleteProfile = async (req, res) => {
+exports.CompleteProfile = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
     const userId = req.user.id;
-    const image = req.file ? req.file.path : null;
-    console.log(image, "Image Path");
+    const image = req.file ? req.file.filename : null;
 
     const {
       name,
@@ -339,8 +417,6 @@ exports.UpdateProfile = async (req, res) => {
       pincode,
       country,
     } = req.body;
-    console.log(req.body,"BoDY");
-    
 
     const user = await User.findByPk(userId, { transaction });
     const patient = await Patient.findOne({
@@ -354,6 +430,26 @@ exports.UpdateProfile = async (req, res) => {
       return res.status(404).json({
         status: 0,
         message: "User/Patient not found",
+      });
+    }
+
+    // Check if email or mobile already exists for another user
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [
+          { email },
+          { mobile }
+        ],
+        id: { [Op.ne]: userId }
+      },
+      transaction,
+    });
+
+    if (existingUser) {
+      await transaction.rollback();
+      return res.status(400).json({
+        status: 0,
+        message: existingUser.email === email ? "Email already exists" : "Mobile already exists",
       });
     }
 

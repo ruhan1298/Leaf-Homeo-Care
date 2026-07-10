@@ -89,7 +89,7 @@ exports.AddDoctor = async (req, res, next) => {
       data: doctor,
     });
   } catch (error) {
-    log(error.message);
+    console.log(error.message);
     next(error);
   }
 
@@ -144,8 +144,6 @@ exports.GetDoctors = async (req, res, next) => {
       order: [["id", "DESC"]],
     });
 
-    console.log("Doctors fetched:", rows);
-
     return res.status(200).json({
       status: 1,
       message: "Doctors fetched successfully",
@@ -193,7 +191,7 @@ exports.DeleteDoctor = async (req, res, next) => {
 };
 exports.UpdateDoctor = async (req, res, next) => {
   try {
-    const image = req.file ? req.file.path : null;
+    const image = req.file ? req.file.filename : null;
     const {
       doctorId,
       name,
@@ -205,18 +203,9 @@ exports.UpdateDoctor = async (req, res, next) => {
       consultationFee,
       bio,
       IsExpert,
-
     } = req.body;
-    console.log(req.body,"BODY");
-    console.log(image,"IMAGE");
 
-const doctor = await Doctor.findOne({
-  where: {
-    userId: doctorId
-  }
-
-});
-console.log(doctor,"DOCTOR");
+    const doctor = await Doctor.findByPk(doctorId);
     if (!doctor) {
       return res.status(404).json({
         status: 0,
@@ -224,9 +213,7 @@ console.log(doctor,"DOCTOR");
       });
     }
 
-
     const user = await User.findByPk(doctor.userId);
-
     if (!user) {
       return res.status(404).json({
         status: 0,
@@ -238,7 +225,7 @@ console.log(doctor,"DOCTOR");
       name,
       email,
       mobile,
-      image: image || user.image, // Update image only if a new one is provided
+      image: image || user.image,
     });
 
     await doctor.update({

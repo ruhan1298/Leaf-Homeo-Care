@@ -8,7 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const Sequelize = require("sequelize");
 const Notification = require("../models/Notification");
 
-exports.AvaiblitySlots = async (req,res,next ) =>{
+exports.AvailabilitySlots = async (req,res,next ) =>{
   try {
     const { doctorId, date } = req.body;
     if (!doctorId || !date) {
@@ -18,7 +18,23 @@ exports.AvaiblitySlots = async (req,res,next ) =>{
       });
     }
 
+    // Validate doctor exists
+    const doctor = await Doctor.findByPk(doctorId);
+    if (!doctor) {
+      return res.status(404).json({
+        status: 0,
+        message: "Doctor not found"
+      });
+    }
+
+    // Validate date format
     const selectedDate = new Date(date);
+    if (isNaN(selectedDate.getTime())) {
+      return res.status(400).json({
+        status: 0,
+        message: "Invalid date format"
+      });
+    }
 
     const dayOfWeek = selectedDate
       .toLocaleDateString("en-US", {
@@ -127,7 +143,6 @@ exports.AppointmentBooking = async (req, res, next) => {
     const userId = req.user.id;
     console.log("Patient ID from token:", userId); // Log the patient ID for debugging
 
-    console.log("Patient ID from token:", userId); // Log the patient ID for debugging
     const patient = await Patient.findOne({
       where: {
         userId
@@ -158,6 +173,18 @@ exports.AppointmentBooking = async (req, res, next) => {
         message: "Doctor ID is required for specific doctor request",
       });
     }
+
+    // Validate doctor exists for specific_doctor requests
+    if (requestType === "specific_doctor") {
+      const doctor = await Doctor.findByPk(doctorId);
+      if (!doctor) {
+        return res.status(404).json({
+          status: 0,
+          message: "Doctor not found",
+        });
+      }
+    }
+
     const appointment = await Appointment.create({
       patientId,
       doctorId: requestType === "specific_doctor" ? doctorId : null,
@@ -429,6 +456,10 @@ exports.myAppointments = async (req, res) => {
           whereClause.status = "completed";
           break;
 
+        case "Cancelled":
+          whereClause.status = "cancelled";
+          break;
+
         default:
           return res.status(400).json({
             status: 0,
@@ -499,9 +530,19 @@ console.log("Fetched Appointments:", result); // Log the fetched appointments fo
 exports.CancelAppointment = async (req, res) => {
   try {
     const userId = req.user.id;
-    
+
     const { appointmentId } = req.body;
 
+    const patient = await Patient.findOne({
+      where: { userId }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 0,
+        message: "Patient profile not found"
+      });
+    }
 
     const appointment = await Appointment.findByPk(
       appointmentId,
@@ -517,12 +558,21 @@ exports.CancelAppointment = async (req, res) => {
     );
     console.log(appointment,"appointment");
 
-        if (!appointment) {
+    if (!appointment) {
       return res.status(404).json({
         status: 0,
         message: "Appointment not found"
       });
     }
+
+    // Authorization check - patient can only cancel their own appointments
+    if (appointment.patientId !== patient.id) {
+      return res.status(403).json({
+        status: 0,
+        message: "Unauthorized access"
+      });
+    }
+
     if (appointment.status === "cancelled") {
       return res.status(400).json({
         status: 0,
@@ -539,9 +589,9 @@ exports.CancelAppointment = async (req, res) => {
       message: "A patient has cancelled their appointment.",
       type: "appointment",
       referenceId: appointment.id,
-   
+
     });
-    
+
 
     return res.status(200).json({
       status: 1,
@@ -557,6 +607,10 @@ exports.CancelAppointment = async (req, res) => {
 
 
   } catch (error) {
-    console.error(error);     
+    console.error(error);
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong",
+    });
   }
 }

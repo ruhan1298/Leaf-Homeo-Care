@@ -68,6 +68,8 @@ exports.AcceptAppointment = async (req, res) => {
   try {
 
     const { appointmentId } = req.body;
+    console.log(req.body,"BODY");
+    
 
     const userId = req.user.id;
 
@@ -85,11 +87,21 @@ exports.AcceptAppointment = async (req, res) => {
     const appointment = await Appointment.findByPk(
       appointmentId
     );
+    console.log(appointment,"APPOINRMENR");
+    
 
     if (!appointment) {
       return res.status(404).json({
         status: 0,
         message: "Appointment not found"
+      });
+    }
+
+    // Authorization check - doctor can only accept appointments assigned to them or any_doctor requests
+    if (appointment.requestType === "specific_doctor" && appointment.doctorId !== doctor.id) {
+      return res.status(403).json({
+        status: 0,
+        message: "You cannot accept this appointment"
       });
     }
 
@@ -99,29 +111,6 @@ exports.AcceptAppointment = async (req, res) => {
         message:
           "Appointment already processed"
       });
-    }
-
-    // specific doctor validation
-    if (
-      appointment.requestType ===
-      "specific_doctor"
-    ) {
-
-      if (
-        appointment.doctorId !== doctor.id
-      ) {
-
-        return res.status(403).json({
-
-          status: 0,
-
-          message:
-            "You cannot accept this appointment"
-
-        });
-
-      }
-
     }
 
     // any doctor assignment
@@ -143,27 +132,19 @@ exports.AcceptAppointment = async (req, res) => {
 
     await appointment.save();
 
-    await Notification.create({
+const patient = await Patient.findByPk(appointment.patientId);
+console.log(patient, "PATIENT");
 
-      userId:
-        appointment.patientId,
+const notification = await Notification.create({
+  userId: patient.userId,
+  senderId: doctor.userId,
+  title: "Appointment Accepted",
+  message: "Your appointment has been accepted.",
+  type: "appointment",
+  referenceId: appointment.id
+});
 
-      senderId:
-        userId,
-
-      title:
-        "Appointment Accepted",
-
-      message:
-        "Your appointment has been accepted.",
-
-      type:
-        "appointment",
-
-      referenceId:
-        appointment.id
-
-    });
+console.log(notification, "NOTIFICATION CREATED");
 
     return res.status(200).json({
 

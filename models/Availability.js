@@ -14,22 +14,22 @@ const Availability = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-      dayOfWeek: {
-    type: DataTypes.ENUM(
-      "monday",
-      "tuesday",
-      "wednesday",
-      "thursday",
-      "friday",
-      "saturday",
-      "sunday"
-    ),
-    allowNull: false,
-  },
+    dayOfWeek: {
+      type: DataTypes.ENUM(
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ),
+      allowNull: false,
+    },
     startTime: {
       type: DataTypes.TIME,
-      allowNull: false, 
-  },
+      allowNull: false,
+    },
     endTime: {
       type: DataTypes.TIME,
       allowNull: false,
@@ -39,18 +39,15 @@ const Availability = sequelize.define(
       allowNull: false,
       defaultValue: 30, // Default slot duration in minutes
     },
-    IsAvailable: { 
-
-        type: DataTypes.BOOLEAN,
-        defaultValue: true,
+    IsAvailable: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
     },
-},
-{
+  },
+  {
     tableName: "availabilities",
     timestamps: true,
   }
 );
-module.exports = Availability
 
-    
-   
+module.exports = Availability;
