@@ -7,7 +7,7 @@ const authMiddleware = require('../middleware/auth');
 router.post('/get-slot',authMiddleware,appointmentController.AvailabilitySlots)
 router.post('/book-appointment', authMiddleware, appointmentController.AppointmentBooking);
 router.get('/upcoming-appointments', authMiddleware, appointmentController.UpcomingAppointments);
-router.post('/my-appointments', authMiddleware, appointmentController.myAppointments);
+router.get('/my-appointments', authMiddleware, appointmentController.myAppointments);
 router.post('/cancel-appointment', authMiddleware, appointmentController.CancelAppointment);
 
 module.exports = router;

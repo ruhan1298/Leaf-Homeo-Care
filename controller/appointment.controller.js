@@ -429,87 +429,48 @@ exports.myAppointments = async (req, res) => {
       });
     }
 
-    const { status } = req.body;
+    const appointments = await Appointment.findAll({
+      where: {
+        patientId: patient.id
+      },
 
-    const whereClause = {
-      patientId: patient.id
-    };
-
-    if (status) {
-      switch (status) {
-
-        case "Pending":
-          whereClause.status = "pending";
-          break;
-
-        case "Confirmed":
-          whereClause.status = {
-            [Op.in]: [
-              "accepted",
-              "payment_pending",
-              "paid"
-            ]
-          };
-          break;
-
-        case "Completed":
-          whereClause.status = "completed";
-          break;
-
-        case "Cancelled":
-          whereClause.status = "cancelled";
-          break;
-
-        default:
-          return res.status(400).json({
-            status: 0,
-            message: "Invalid status"
-          });
-      }
-    }
-
-const appointments = await Appointment.findAll({
-  where: whereClause,
-
-  attributes: [
-    "id",
-    "status",
-    "appointmentDateTime"
-  ],
-
-  include: [
-    {
-      model: Doctor,
-      as: "doctor",
-      attributes: ["id"],
+      attributes: [
+        "id",
+        "status",
+        "appointmentDateTime"
+      ],
 
       include: [
         {
-          model: User,
-          as: "user",
-          attributes: [
-            "name",
-            "image"
+          model: Doctor,
+          as: "doctor",
+          attributes: ["id"],
+
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: [
+                "name",
+                "image"
+              ]
+            }
           ]
         }
+      ],
+
+      order: [
+        ["appointmentDateTime", "DESC"]
       ]
-    }
-  ],
+    });
 
-  order: [
-    ["appointmentDateTime", "DESC"]
-  ]
-});
-console.log("Fetched Appointments:", appointments); // Log the fetched appointments for debugging
-const result = appointments.map(item => ({
-  id: item.id,
-  doctorName: item.doctor?.user?.name,
-  doctorImage: item.doctor?.user?.image,
-  status: item.status,
-  appointmentDateTime: item.appointmentDateTime
-}));
-console.log("Fetched Appointments:", result); // Log the fetched appointments for debugging
-
+    const result = appointments.map(item => ({
+      id: item.id,
+      doctorName: item.doctor?.user?.name,
+      doctorImage: item.doctor?.user?.image,
+      status: item.status,
+      appointmentDateTime: item.appointmentDateTime
+    }));
 
     return res.status(200).json({
       status: 1,
