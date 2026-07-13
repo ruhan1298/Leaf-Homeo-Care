@@ -208,14 +208,28 @@ exports.GetUser = async (req, res) => {
 
     const userData = user.toJSON();
 
-    const data = {
-      ...userData,
-      ...(userData.patientProfile || {}),
-      ...(userData.doctorProfile || {}),
+    let data = {
+      id: userData.id,
+      name: userData.name,
+      email: userData.email,
+      mobile: userData.mobile,
+      role: userData.role,
+      image: userData.image,
     };
 
-    delete data.patientProfile;
-    delete data.doctorProfile;
+    // Only include relevant profile based on user role
+    if (user.role === "patient" && userData.patientProfile) {
+      data = {
+        ...data,
+        ...userData.patientProfile,
+        IsCompleteProfile: userData.patientProfile.IsCompleteProfile,
+      };
+    } else if (user.role === "doctor" && userData.doctorProfile) {
+      data = {
+        ...data,
+        ...userData.doctorProfile,
+      };
+    }
 
     return res.status(200).json({
       status: 1,

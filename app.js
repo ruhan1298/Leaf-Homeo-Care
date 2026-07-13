@@ -43,6 +43,11 @@ app.use(logger('dev'));
 
 
 
+app.use("/api/v1/payment/webhook", (req, res, next) => {
+  console.log("Webhook Request Received");
+  next();
+});
+
 app.use(
   "/api/v1/payment/webhook",
   bodyParser.raw({ type: "application/json" })

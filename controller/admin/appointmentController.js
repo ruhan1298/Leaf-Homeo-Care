@@ -46,7 +46,7 @@ exports.GetAppointments = async (req, res, next) => {
         {
           model: Payment,
           as: "payment",
-          attributes: ["id", "amount", "transactionId", "gateway", "status", "paidAt"],
+          attributes: ["id", "amount", "gateway", "status", "paidAt"],
         },
       ],
       // 2. Dynamic Search Path adjusted as per your exact aliases
@@ -112,7 +112,7 @@ exports.GetAppointments = async (req, res, next) => {
         ? {
             id: appt.payment.id,
             amount: appt.payment.amount,
-            transactionId: appt.payment.transactionId,
+            // transactionId: appt.payment.transactionId,
             gateway: appt.payment.gateway,
             status: appt.payment.status,
             paidAt: appt.payment.paidAt,
