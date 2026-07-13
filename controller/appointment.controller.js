@@ -491,87 +491,81 @@ exports.myAppointments = async (req, res) => {
 exports.CancelAppointment = async (req, res) => {
   try {
     const userId = req.user.id;
-
     const { appointmentId } = req.body;
 
     const patient = await Patient.findOne({
-      where: { userId }
+      where: { userId },
     });
 
     if (!patient) {
       return res.status(404).json({
         status: 0,
-        message: "Patient profile not found"
+        message: "Patient profile not found",
       });
     }
 
-    const appointment = await Appointment.findByPk(
-      appointmentId,
-      {
-        include: [
-          {
-            model: Doctor,
-            as: "doctor",
-            attributes: ["userId"]
-          }
-        ]
-      }
-    );
-    console.log(appointment,"appointment");
+    const appointment = await Appointment.findByPk(appointmentId, {
+      include: [
+        {
+          model: Doctor,
+          as: "doctor",
+          attributes: ["userId"],
+        },
+      ],
+    });
 
     if (!appointment) {
       return res.status(404).json({
         status: 0,
-        message: "Appointment not found"
+        message: "Appointment not found",
       });
     }
 
-    // Authorization check - patient can only cancel their own appointments
+    // Patient can cancel only their own appointment
     if (appointment.patientId !== patient.id) {
       return res.status(403).json({
         status: 0,
-        message: "Unauthorized access"
+        message: "Unauthorized access",
       });
     }
 
     if (appointment.status === "cancelled") {
       return res.status(400).json({
         status: 0,
-        message: "Appointment is already cancelled"
+        message: "Appointment is already cancelled",
       });
     }
-    await appointment.update({ status: "cancelled" });
 
-    // Send notification to the doctor
-    await Notification.create({
-      userId: appointment.doctor.userId,
-      senderId: req.user.id,
-      title: "Appointment Cancelled",
-      message: "A patient has cancelled their appointment.",
-      type: "appointment",
-      referenceId: appointment.id,
-
+    // Update appointment status
+    await appointment.update({
+      status: "cancelled",
     });
 
+    // Notify doctor only if a doctor is assigned
+    if (appointment.doctor?.userId) {
+      await Notification.create({
+        userId: appointment.doctor.userId,
+        senderId: req.user.id,
+        title: "Appointment Cancelled",
+        message: "A patient has cancelled their appointment.",
+        type: "appointment",
+        referenceId: appointment.id,
+      });
+    }
 
     return res.status(200).json({
       status: 1,
       message: "Appointment cancelled successfully",
-      data: appointment
+      data: appointment,
     });
-
-
-
-    
-
-
-
 
   } catch (error) {
     console.error(error);
+
     return res.status(500).json({
       status: 0,
       message: "Something went wrong",
+      error: error.message,
     });
   }
-}
+};
