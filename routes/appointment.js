@@ -9,5 +9,6 @@ router.post('/book-appointment', authMiddleware, appointmentController.Appointme
 router.get('/upcoming-appointments', authMiddleware, appointmentController.UpcomingAppointments);
 router.get('/my-appointments', authMiddleware, appointmentController.myAppointments);
 router.post('/cancel-appointment', authMiddleware, appointmentController.CancelAppointment);
-
+router.post('/get-video-token', authMiddleware, appointmentController.GetVideoToken);
+router.post('/end-video-call', authMiddleware, appointmentController.EndVideoCall);
 module.exports = router;

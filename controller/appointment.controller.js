@@ -6,6 +6,9 @@ const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const JWT_SECRET = process.env.JWT_SECRET;
 const Sequelize = require("sequelize");
+const twilio = require('twilio');
+const { AccessToken } = twilio.jwt;
+const { VideoGrant } = AccessToken;
 const Notification = require("../models/Notification");
 
 exports.AvailabilitySlots = async (req,res,next ) =>{
@@ -369,7 +372,7 @@ exports.UpcomingAppointments = async (req, res) => {
         item.doctor?.user?.name,
 
       doctorImage:
-        item.doctor?.user?.image,
+        item.doctor?.user?.image ? `http://localhost:5000/uploads/${item.doctor?.user?.image}` : null,
 
       specialization:
         item.doctor?.specialization,
@@ -467,7 +470,7 @@ exports.myAppointments = async (req, res) => {
     const result = appointments.map(item => ({
       id: item.id,
       doctorName: item.doctor?.user?.name,
-      doctorImage: item.doctor?.user?.image,
+      doctorImage: item.doctor?.user?.image ? `http://localhost:5000/uploads/${item.doctor?.user?.image}` : null,
       status: item.status,
       appointmentDateTime: item.appointmentDateTime
     }));
@@ -566,6 +569,194 @@ exports.CancelAppointment = async (req, res) => {
       status: 0,
       message: "Something went wrong",
       error: error.message,
+    });
+  }
+};
+exports.GetVideoToken = async (req, res) => {
+  try {
+    const { appointmentId } = req.body;
+    console.log("GetVideoToken called with appointmentId:", appointmentId);
+
+    if (!appointmentId) {
+      return res.status(400).json({
+        status: 0,
+        message: "appointmentId is required."
+      });
+    }
+
+    // Retrieve the appointment along with patient & doctor user references
+    const appointment = await Appointment.findByPk(appointmentId, {
+      include: [
+        { model: Patient, as: "patient", attributes: ["id", "userId"] },
+        { model: Doctor, as: "doctor", attributes: ["id", "userId"] }
+      ]
+    });
+
+    console.log("Appointment found:", appointment ? "Yes" : "No");
+    console.log("Appointment status:", appointment?.status);
+    console.log("Room name:", appointment?.roomName);
+
+    // Validate that the appointment exists and is accepted
+    if (!appointment || appointment.status !== 'accepted') {
+      return res.status(403).json({
+        status: 0,
+        message: "Video call access is not permitted for this appointment."
+      });
+    }
+
+    // Verify the requesting user is either the patient or the doctor
+    const userId = req.user.id;
+    const isPatient = appointment.patient && appointment.patient.userId === userId;
+    const isDoctor = appointment.doctor && appointment.doctor.userId === userId;
+
+    console.log("User ID:", userId);
+    console.log("Is patient:", isPatient);
+    console.log("Is doctor:", isDoctor);
+
+    if (!isPatient && !isDoctor) {
+      return res.status(403).json({
+        status: 0,
+        message: "You are not authorized to join this call."
+      });
+    }
+
+    // Ensure room exists
+    if (!appointment.roomName) {
+      return res.status(400).json({
+        status: 0,
+        message: "Room not found for this appointment."
+      });
+    }
+
+    console.log("Twilio credentials check:");
+    console.log("Account SID:", process.env.TWILIO_ACCOUNT_SID ? "Set" : "Not set");
+    console.log("API Key:", process.env.TWILIO_API_KEY ? "Set" : "Not set");
+    console.log("API Secret:", process.env.TWILIO_API_SECRET ? "Set" : "Not set");
+    console.log("Room name for token:", appointment.roomName);
+    console.log("Requesting User ID:", userId);
+    console.log("Patient ID:", appointment.patientId);
+    console.log("Patient User ID:", appointment.patient?.userId);
+    console.log("Doctor ID:", appointment.doctorId);
+    console.log("Doctor User ID:", appointment.doctor?.userId);
+    console.log("User role:", isDoctor ? "doctor" : "patient");
+
+    // Create unique identity based on role and actual appointment IDs (not JWT user ID)
+    // This prevents issues when testing with same browser/session
+    const uniqueIdentity = isDoctor 
+      ? `doctor_${appointment.doctorId}` 
+      : `patient_${appointment.patientId}`;
+    
+    console.log("Unique identity for token:", uniqueIdentity);
+
+    // Create the Twilio Access Token with enhanced configuration
+    const token = new AccessToken(
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_API_KEY,
+      process.env.TWILIO_API_SECRET,
+      { 
+        identity: uniqueIdentity,
+        ttl: 3600 // 1 hour expiry
+      }
+    );
+
+    // Grant access to the specific room created during acceptance
+    const videoGrant = new VideoGrant({
+      room: appointment.roomName
+    });
+    token.addGrant(videoGrant);
+
+    const jwtToken = token.toJwt();
+    console.log("Token generated successfully for room:", appointment.roomName);
+
+    // Return the token and room name to the frontend
+    return res.status(200).json({
+      status: 1,
+      message: "Token generated successfully.",
+      data: {
+        token: jwtToken,
+        roomName: appointment.roomName,
+        role: isDoctor ? "doctor" : "patient",
+        identity: uniqueIdentity
+      }
+    });
+
+  } catch (error) {
+    console.error("Error generating video token:", error);
+    return res.status(500).json({
+      status: 0,
+      message: "Internal server error occurred while generating token."
+    });
+  }
+};
+
+exports.EndVideoCall = async (req, res) => {
+  try {
+    const { appointmentId } = req.body;
+    const userId = req.user.id;
+
+    if (!appointmentId) {
+      return res.status(400).json({
+        status: 0,
+        message: "appointmentId is required."
+      });
+    }
+
+    const appointment = await Appointment.findByPk(appointmentId, {
+      include: [
+        { model: Patient, as: "patient", attributes: ["id", "userId"] },
+        { model: Doctor, as: "doctor", attributes: ["id", "userId"] }
+      ]
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        status: 0,
+        message: "Appointment not found."
+      });
+    }
+
+    // Verify authorization
+    const isPatient = appointment.patient && appointment.patient.userId === userId;
+    const isDoctor = appointment.doctor && appointment.doctor.userId === userId;
+
+    if (!isPatient && !isDoctor) {
+      return res.status(403).json({
+        status: 0,
+        message: "You are not authorized to end this call."
+      });
+    }
+
+    // Complete the appointment
+    appointment.status = 'completed';
+    appointment.completedAt = new Date();
+    await appointment.save();
+
+    // Clean up Twilio room (optional - rooms auto-expire)
+    try {
+      const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      const room = await twilioClient.video.rooms(appointment.roomName).fetch();
+      
+      // Only complete the room if both participants have left
+      if (room && room.status === 'in-progress' && room.participants.size === 0) {
+        await twilioClient.video.rooms(appointment.roomName).update({ status: 'completed' });
+        console.log(`Twilio room ${appointment.roomName} completed`);
+      }
+    } catch (roomError) {
+      console.log('Room cleanup note:', roomError.message);
+      // Don't fail the request if room cleanup fails
+    }
+
+    return res.status(200).json({
+      status: 1,
+      message: "Video call ended successfully.",
+      data: appointment
+    });
+
+  } catch (error) {
+    console.error("Error ending video call:", error);
+    return res.status(500).json({
+      status: 0,
+      message: "Internal server error occurred while ending call."
     });
   }
 };

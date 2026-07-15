@@ -71,6 +71,8 @@ app.use('/api/v1/payment',paymentRouter)
 app.use(function(req, res, next) {
   next(createError(404));
 });
+
+
 sequelize
   .authenticate()
   .then(() => {

@@ -55,6 +55,14 @@ const Appointment = sequelize.define(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    completedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    roomName:{
+      type:DataTypes.STRING,
+      allowNull:true 
+    }
   },
   {
     tableName: "appointments",

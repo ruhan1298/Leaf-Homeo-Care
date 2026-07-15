@@ -3,6 +3,7 @@ const { Op } = require("sequelize");
 const nodemailer = require("nodemailer");
 const JWT_SECRET = process.env.JWT_SECRET;
 const Sequelize = require("sequelize");
+const twilio = require('twilio');
 
 const { User, Doctor, Patient, Appointment, Payment ,Availability} = require("../../models");
 
@@ -130,6 +131,61 @@ exports.AcceptAppointment = async (req, res) => {
     appointment.acceptedAt =
       new Date();
 
+appointment.roomName = `room_${appointmentId}_${Date.now()}`;
+    
+    // Create Twilio video room with enhanced configuration
+    try {
+      // Verify Twilio credentials are set
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+        console.error('Twilio credentials not configured');
+        return res.status(500).json({
+          status: 0,
+          message: 'Twilio credentials not configured. Please check your environment variables.'
+        });
+      }
+
+      const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      
+      // Check if room already exists (prevent duplicates)
+      try {
+        await twilioClient.video.rooms(appointment.roomName).fetch();
+        console.log(`Room ${appointment.roomName} already exists, using existing room`);
+      } catch (fetchError) {
+        // Room doesn't exist, create new one
+        if (fetchError.code === 20404) {
+          await twilioClient.video.rooms.create({
+            uniqueName: appointment.roomName,
+            type: 'go',
+            enableTurn: true,
+            maxParticipants: 2,
+            recordParticipantsOnConnect: false
+          });
+          console.log(`Twilio room created: ${appointment.roomName}`);
+        } else {
+          console.error('Error fetching Twilio room:', fetchError);
+          throw fetchError;
+        }
+      }
+    } catch (twilioError) {
+      console.error('Error managing Twilio room:', twilioError);
+      if (twilioError.code === 20003) {
+        return res.status(500).json({
+          status: 0,
+          message: 'Invalid Twilio credentials. Please check your account SID and auth token.'
+        });
+      } else if (twilioError.code === 20005) {
+        return res.status(500).json({
+          status: 0,
+          message: 'Twilio account does not have video permissions enabled.'
+        });
+      } else {
+        return res.status(500).json({
+          status: 0,
+          message: `Failed to create video room: ${twilioError.message || 'Unknown error'}`
+        });
+      }
+    }
+    
     await appointment.save();
 
 const patient = await Patient.findByPk(appointment.patientId);
@@ -420,7 +476,7 @@ exports.GetDoctorAppointments = async (req, res) => {
       id: apt.id,
       patientId: apt.patientId,
       patientName: apt.patient?.user?.name,
-      patientImage: apt.patient?.user?.image,
+      patientImage: apt.patient?.user?.image ? `http://localhost:5000/uploads/${apt.patient?.user?.image}` : null,
       patientEmail: apt.patient?.user?.email,
       patientPhone: apt.patient?.user?.mobile,
       appointmentDateTime: apt.appointmentDateTime,
@@ -645,7 +701,7 @@ exports.GetDoctorConsultationHistory = async (req, res) => {
       id: consultation.id,
       patientId: consultation.patientId,
       patientName: consultation.patient?.user?.name,
-      patientImage: consultation.patient?.user?.image,
+      patientImage: consultation.patient?.user?.image ? `http://localhost:5000/uploads/${consultation.patient?.user?.image}` : null,
       appointmentDateTime: consultation.appointmentDateTime,
       status: consultation.status,
       reason: consultation.reason,
