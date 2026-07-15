@@ -597,7 +597,7 @@ exports.GetVideoToken = async (req, res) => {
     console.log("Room name:", appointment?.roomName);
 
     // Validate that the appointment exists and is accepted
-    if (!appointment || appointment.status !== 'accepted') {
+    if (!appointment || appointment.status !== 'paid') {
       return res.status(403).json({
         status: 0,
         message: "Video call access is not permitted for this appointment."
