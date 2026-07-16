@@ -191,7 +191,7 @@ exports.DeleteDoctor = async (req, res, next) => {
 };
 exports.UpdateDoctor = async (req, res, next) => {
   try {
-    const image = req.file ? req.file.filename : null;
+    const image = req.file ? req.file.path : null;
     const {
       doctorId,
       name,

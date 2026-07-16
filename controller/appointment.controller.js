@@ -310,6 +310,7 @@ exports.UpcomingAppointments = async (req, res) => {
           attributes: [
 
             "id",
+            "userId",
             "specialization",
             "experience",
             "qualification",
@@ -367,6 +368,9 @@ exports.UpcomingAppointments = async (req, res) => {
 
       doctorId:
         item.doctor?.id,
+
+      doctorUserId:
+        item.doctor?.userId,
 
       doctorName:
         item.doctor?.user?.name,
@@ -447,7 +451,7 @@ exports.myAppointments = async (req, res) => {
         {
           model: Doctor,
           as: "doctor",
-          attributes: ["id"],
+          attributes: ["id", "userId"],
 
           include: [
             {
@@ -469,6 +473,7 @@ exports.myAppointments = async (req, res) => {
 
     const result = appointments.map(item => ({
       id: item.id,
+      doctorUserId: item.doctor?.userId,
       doctorName: item.doctor?.user?.name,
       doctorImage: item.doctor?.user?.image ? `http://localhost:5000/uploads/${item.doctor?.user?.image}` : null,
       status: item.status,

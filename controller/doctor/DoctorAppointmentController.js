@@ -447,7 +447,16 @@ exports.GetDoctorAppointments = async (req, res) => {
       });
     }
 
-    const whereClause = { doctorId: doctor.id };
+    // Include both assigned appointments and any_doctor requests
+    const whereClause = {
+      [Op.or]: [
+        { doctorId: doctor.id },
+        { 
+          doctorId: null,
+          requestType: "any_doctor"
+        }
+      ]
+    };
 
     if (status && status !== "all") {
       whereClause.status = status;
@@ -475,6 +484,7 @@ exports.GetDoctorAppointments = async (req, res) => {
     const data = appointments.map(apt => ({
       id: apt.id,
       patientId: apt.patientId,
+      patientUserId: apt.patient?.userId,
       patientName: apt.patient?.user?.name,
       patientImage: apt.patient?.user?.image ? `http://localhost:5000/uploads/${apt.patient?.user?.image}` : null,
       patientEmail: apt.patient?.user?.email,
@@ -711,6 +721,58 @@ exports.GetDoctorConsultationHistory = async (req, res) => {
     return res.status(200).json({
       status: 1,
       message: "Consultation history fetched successfully",
+      data
+    });
+
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong"
+    });
+  }
+};
+
+exports.GetPublicDoctorProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const doctor = await Doctor.findOne({
+      where: { id },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "name", "email", "mobile", "image"]
+        }
+      ]
+    });
+
+    if (!doctor) {
+      return res.status(404).json({
+        status: 0,
+        message: "Doctor not found"
+      });
+    }
+
+    const data = {
+      id: doctor.id,
+      name: doctor.user?.name,
+      email: doctor.user?.email,
+      mobile: doctor.user?.mobile,
+      image: doctor.user?.image ? `http://localhost:5000/${doctor.user?.image}` : null,
+      specialization: doctor.specialization,
+      qualification: doctor.qualification,
+      experience: doctor.experience,
+      consultationFee: doctor.consultationFee,
+      bio: doctor.bio,
+      IsExpert: doctor.IsExpert,
+      joinedDate: doctor.createdAt
+    };
+
+    return res.status(200).json({
+      status: 1,
+      message: "Doctor profile fetched successfully",
       data
     });
 

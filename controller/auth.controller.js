@@ -306,7 +306,7 @@ exports.UpdateProfile = async (req, res) => {
       pincode,
       country,
     } = req.body;
-    const image = req.file ? req.file.filename : null;
+    const image = req.file ? req.file.path : null;
 
     if (!name || !email || !mobile) {
       await transaction.rollback();

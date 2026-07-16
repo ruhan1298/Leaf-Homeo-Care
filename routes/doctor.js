@@ -3,6 +3,9 @@ const router = express.Router();
 const authmiddleware = require("../middleware/auth");
 const doctorController = require('../controller/doctor/DoctorAppointmentController');
 
+// Public route - no authentication required
+router.get('/public/:id', doctorController.GetPublicDoctorProfile);
+
 router.post('/accept-appointment', authmiddleware, doctorController.AcceptAppointment);
 router.post('/reject-appointment', authmiddleware, doctorController.RejectAppointment);
 router.post('/add-availability', authmiddleware, doctorController.AddAvailability);

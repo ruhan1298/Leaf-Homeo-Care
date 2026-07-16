@@ -24,7 +24,8 @@ var adminRouter = require('./routes/Admin/adminRoute');
 var PatientRouter = require('./routes/patient');
 var appointmentRouter = require('./routes/appointment');
 var doctorRouter = require('./routes/doctor');
-var paymentRouter = require('./routes/payment')
+var paymentRouter = require('./routes/payment');
+var chatRouter = require('./routes/chat');
  const cors = require("cors");
 
 var app = express();
@@ -66,7 +67,8 @@ app.use("/api/v1/admin", adminRouter);// catch 404 and forward to error handler
 app.use("/api/v1/patient", PatientRouter);
 app.use("/api/v1/appointment", appointmentRouter);
 app.use("/api/v1/doctor", doctorRouter);
-app.use('/api/v1/payment',paymentRouter)
+app.use('/api/v1/payment',paymentRouter);
+app.use('/api/v1/chat', chatRouter);
 
 app.use(function(req, res, next) {
   next(createError(404));

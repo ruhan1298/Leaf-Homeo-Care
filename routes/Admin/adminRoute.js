@@ -6,7 +6,7 @@ const doctorController = require("../../controller/admin/doctorController");
 const patientController = require("../../controller/admin/patientController");
 const AppointmentController = require("../../controller/admin/appointmentController");
 const dashboardController = require("../../controller/admin/dashboardController");
-const upload = require("../../middleware/multer");
+const {upload} = require("../../middleware/multer");
 
 router.post("/add", authmiddleware, rbacMiddleware("admin"), doctorController.AddDoctor);
 router.post("/getdoctors", authmiddleware, rbacMiddleware("admin"), doctorController.GetDoctors);
