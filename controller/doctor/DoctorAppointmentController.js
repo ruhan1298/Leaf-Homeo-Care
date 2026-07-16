@@ -155,7 +155,7 @@ appointment.roomName = `room_${appointmentId}_${Date.now()}`;
         if (fetchError.code === 20404) {
           await twilioClient.video.rooms.create({
             uniqueName: appointment.roomName,
-            type: 'go',
+            type: 'group',
             enableTurn: true,
             maxParticipants: 2,
             recordParticipantsOnConnect: false
