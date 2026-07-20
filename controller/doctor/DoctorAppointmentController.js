@@ -10,13 +10,10 @@ const { User, Doctor, Patient, Appointment, Payment ,Availability} = require("..
 
 exports.AddAvailability = async (req, res) => {
   try {
-
     const userId = req.user.id;
 
     const doctor = await Doctor.findOne({
-      where: {
-        userId
-      }
+      where: { userId }
     });
 
     if (!doctor) {
@@ -35,18 +32,32 @@ exports.AddAvailability = async (req, res) => {
       });
     }
 
-    const availabilityData = availability.map(item => ({
-      doctorId: doctor.id,
-      dayOfWeek: item.dayOfWeek,
-      startTime: item.startTime,
-      endTime: item.endTime,
-      slotDuration: item.slotDuration || 30,
-      IsAvailable: true
-    }));
+    // Process each day's availability
+    const availabilityData = [];
+    for (const item of availability) {
+      if (!item.dayOfWeek || !item.slots || !Array.isArray(item.slots)) {
+        continue;
+      }
 
-    const result = await Availability.bulkCreate(
-      availabilityData
-    );
+      // Delete existing slots for this day and doctor
+      await Availability.destroy({
+        where: {
+          doctorId: doctor.id,
+          dayOfWeek: item.dayOfWeek
+        }
+      });
+
+      // Create new slots
+      const slots = item.slots.map(slot => ({
+        doctorId: doctor.id,
+        dayOfWeek: item.dayOfWeek,
+        startTime: slot,
+        isAvailable: true
+      }));
+      availabilityData.push(...slots);
+    }
+
+    const result = await Availability.bulkCreate(availabilityData);
 
     return res.status(201).json({
       status: 1,
@@ -55,14 +66,11 @@ exports.AddAvailability = async (req, res) => {
     });
 
   } catch (error) {
-
     console.error(error);
-
     return res.status(500).json({
       status: 0,
       message: "Something went wrong"
     });
-
   }
 };
 exports.AcceptAppointment = async (req, res) => {
@@ -320,14 +328,23 @@ exports.GetDoctorAvailability = async (req, res) => {
     }
 
     const availability = await Availability.findAll({
-      where: { doctorId: doctor.id },
+      where: { doctorId: doctor.id, isAvailable: true },
       order: [['dayOfWeek', 'ASC'], ['startTime', 'ASC']]
+    });
+
+    // Group by day of week
+    const availabilityMap = {};
+    availability.forEach(slot => {
+      if (!availabilityMap[slot.dayOfWeek]) {
+        availabilityMap[slot.dayOfWeek] = [];
+      }
+      availabilityMap[slot.dayOfWeek].push(slot.startTime);
     });
 
     return res.status(200).json({
       status: 1,
       message: "Availability fetched successfully",
-      data: availability
+      data: availabilityMap
     });
 
   } catch (error) {
@@ -341,7 +358,7 @@ exports.GetDoctorAvailability = async (req, res) => {
 
 exports.UpdateAvailability = async (req, res) => {
   try {
-    const { availabilityId, startTime, endTime, slotDuration, IsAvailable } = req.body;
+    const { availabilityId, isAvailable } = req.body;
     const userId = req.user.id;
 
     const doctor = await Doctor.findOne({
@@ -366,10 +383,7 @@ exports.UpdateAvailability = async (req, res) => {
       });
     }
 
-    if (startTime) availability.startTime = startTime;
-    if (endTime) availability.endTime = endTime;
-    if (slotDuration) availability.slotDuration = slotDuration;
-    if (IsAvailable !== undefined) availability.IsAvailable = IsAvailable;
+    if (isAvailable !== undefined) availability.isAvailable = isAvailable;
 
     await availability.save();
 
@@ -486,7 +500,7 @@ exports.GetDoctorAppointments = async (req, res) => {
       patientId: apt.patientId,
       patientUserId: apt.patient?.userId,
       patientName: apt.patient?.user?.name,
-      patientImage: apt.patient?.user?.image ? `http://localhost:5000/uploads/${apt.patient?.user?.image}` : null,
+      patientImage: apt.patient?.user?.image ? `http://localhost:5000/${apt.patient?.user?.image}` : null,
       patientEmail: apt.patient?.user?.email,
       patientPhone: apt.patient?.user?.mobile,
       appointmentDateTime: apt.appointmentDateTime,
@@ -711,7 +725,7 @@ exports.GetDoctorConsultationHistory = async (req, res) => {
       id: consultation.id,
       patientId: consultation.patientId,
       patientName: consultation.patient?.user?.name,
-      patientImage: consultation.patient?.user?.image ? `http://localhost:5000/uploads/${consultation.patient?.user?.image}` : null,
+      patientImage: consultation.patient?.user?.image ? `http://localhost:5000/${consultation.patient?.user?.image}` : null,
       appointmentDateTime: consultation.appointmentDateTime,
       status: consultation.status,
       reason: consultation.reason,
@@ -733,20 +747,147 @@ exports.GetDoctorConsultationHistory = async (req, res) => {
   }
 };
 
+// exports.GetPublicDoctorProfile = async (req, res) => {
+
+//   try {
+//     const { id } = req.params;
+
+//     // Check if it's an ID-based slug (e.g., "1-amin-khan")
+//     const idBasedMatch = id.match(/^(\d+)-/);
+    
+//     let doctor;
+//     if (idBasedMatch) {
+//       // Extract ID and query by ID
+//       const doctorId = parseInt(idBasedMatch[1]);
+//       doctor = await Doctor.findOne({
+//         where: { id: doctorId },
+//         include: [
+//           {
+//             model: User,
+//             as: "user",
+//             attributes: ["id", "name", "email", "mobile", "image"]
+//           }
+//         ]
+//       });
+//     } else {
+//       // Name-based search with case-insensitive matching
+//       // Convert URL spaces back to actual spaces and trim extra spaces
+//       const searchName = id.replace(/%20/g, ' ').replace(/-/g, ' ').trim();
+      
+//       console.log('Searching for doctor with name:', searchName);
+      
+//       // Remove "Dr." prefix if present for alternative search
+//       const nameWithoutDr = searchName.replace(/^Dr\.\s*/i, '').trim();
+      
+//       doctor = await Doctor.findOne({
+//         include: [
+//           {
+//             model: User,
+//             as: "user",
+//             attributes: ["id", "name", "email", "mobile", "image"],
+//             where: { 
+//               [Op.or]: [
+//                 { name: { [Op.iLike]: searchName } },
+//                 { name: { [Op.iLike]: `Dr. ${searchName}` } },
+//                 { name: { [Op.iLike]: nameWithoutDr } },
+//                 { name: { [Op.iLike]: `Dr. ${nameWithoutDr}` } },
+//                 { name: { [Op.iLike]: searchName.replace(/\s+/g, ' ') } },
+//                 { name: { [Op.iLike]: nameWithoutDr.replace(/\s+/g, ' ') } }
+//               ]
+//             }
+//           }
+//         ]
+//       });
+      
+//       console.log('Doctor found:', doctor ? doctor.user?.name : 'No');
+//     }
+
+//     if (!doctor) {
+//       return res.status(404).json({
+//         status: 0,
+//         message: "Doctor not found"
+//       });
+//     }
+
+//     const data = {
+//       id: doctor.id,
+//       name: doctor.user?.name,
+//       email: doctor.user?.email,
+//       mobile: doctor.user?.mobile,
+//       image: doctor.user?.image ? `http://localhost:5000/${doctor.user?.image}` : null,
+//       specialization: doctor.specialization,
+//       qualification: doctor.qualification,
+//       experience: doctor.experience,
+//       consultationFee: doctor.consultationFee,
+//       bio: doctor.bio,
+//       IsExpert: doctor.IsExpert,
+//       joinedDate: doctor.createdAt
+//     };
+
+//     return res.status(200).json({
+//       status: 1,
+//       message: "Doctor profile fetched successfully",
+//       data
+//     });
+
+//   } catch (error) {
+//     console.log(error);
+//     return res.status(500).json({
+//       status: 0,
+//       message: "Something went wrong"
+//     });
+//   }
+// };
+
 exports.GetPublicDoctorProfile = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const doctor = await Doctor.findOne({
-      where: { id },
-      include: [
-        {
-          model: User,
-          as: "user",
-          attributes: ["id", "name", "email", "mobile", "image"]
-        }
-      ]
-    });
+    // Check if it's an ID-based slug (e.g., "1-amin-khan")
+    const idBasedMatch = id.match(/^(\d+)-/);
+
+    let doctor;
+    if (idBasedMatch) {
+      // Extract ID and query by ID
+      const doctorId = parseInt(idBasedMatch[1]);
+      doctor = await Doctor.findOne({
+        where: { id: doctorId },
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "name", "email", "mobile", "image"]
+          }
+        ]
+      });
+    } else {
+      // Name-based search with case-insensitive, partial matching
+      const searchName = id.replace(/%20/g, ' ').replace(/-/g, ' ').trim();
+
+      console.log('Searching for doctor with name:', searchName);
+
+      // Remove "Dr." prefix if present for alternative search
+      const nameWithoutDr = searchName.replace(/^Dr\.\s*/i, '').trim();
+
+      doctor = await Doctor.findOne({
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "name", "email", "mobile", "image"],
+            where: {
+              [Op.or]: [
+                { name: { [Op.iLike]: `%${searchName}%` } },
+                { name: { [Op.iLike]: `%${nameWithoutDr}%` } }
+              ]
+            }
+          }
+        ],
+        order: [["id", "ASC"]] // deterministic pick if multiple matches
+      });
+
+      console.log('Doctor found:', doctor ? doctor.user?.name : 'No');
+    }
 
     if (!doctor) {
       return res.status(404).json({

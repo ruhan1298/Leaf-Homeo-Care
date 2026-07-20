@@ -2,6 +2,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../../models/User");
 const Doctor = require("../../models/Doctor");
+const crypto = require("crypto");
 
 const { Op } = require("sequelize");
 const nodemailer = require("nodemailer");
@@ -33,11 +34,9 @@ exports.AddDoctor = async (req, res, next) => {
       });
     }
 
-    // Generate Password
-    const plainPassword =
-      "Dr@" + Math.floor(100000 + Math.random() * 900000);
-
-    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+    // Generate random temporary password (will be reset via email link)
+    const tempPassword = crypto.randomBytes(32).toString('hex');
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     // Create User
     const user = await User.create({
@@ -46,6 +45,16 @@ exports.AddDoctor = async (req, res, next) => {
       mobile,
       password: hashedPassword,
       role: "doctor",
+      isPasswordSet: false,
+    });
+
+    // Generate reset token for password setup
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await user.update({
+      resetPasswordToken: resetToken,
+      resetPasswordExpires: resetTokenExpiry
     });
 
     // Create Doctor Profile
@@ -59,7 +68,7 @@ exports.AddDoctor = async (req, res, next) => {
       IsExpert,
     });
 
-    // Send Email
+    // Send Email with reset password link
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -68,19 +77,161 @@ exports.AddDoctor = async (req, res, next) => {
       },
     });
 
+    const resetLink = `${process.env.FRONTEND_URL}/doctor/setup-password?token=${resetToken}&email=${email}`;
+
+    const emailTemplate = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome to Leaf Homeo Care</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+          }
+          .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          }
+          .header {
+            background: linear-gradient(135deg, #00B100 0%, #008800 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+          }
+          .header p {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+          }
+          .content {
+            padding: 40px 30px;
+          }
+          .welcome-text {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #555;
+          }
+          .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #00B100;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+          }
+          .info-box p {
+            margin: 5px 0;
+            font-size: 14px;
+          }
+          .info-box strong {
+            color: #00B100;
+          }
+          .button-container {
+            text-align: center;
+            margin: 30px 0;
+          }
+          .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #00B100 0%, #008800 100%);
+            color: white;
+            padding: 15px 40px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 16px;
+            box-shadow: 0 4px 15px rgba(0, 177, 0, 0.3);
+            transition: all 0.3s ease;
+          }
+          .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 177, 0, 0.4);
+          }
+          .security-note {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-size: 13px;
+            color: #856404;
+          }
+          .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+            border-top: 1px solid #e9ecef;
+          }
+          .footer a {
+            color: #00B100;
+            text-decoration: none;
+          }
+          .emoji {
+            font-size: 24px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🌿 Leaf Homeo Care</h1>
+            <p>Welcome to Our Healthcare Platform</p>
+          </div>
+          <div class="content">
+            <p class="welcome-text">Dear Dr. <strong>${name}</strong>,</p>
+            <p class="welcome-text">We are pleased to inform you that your doctor account has been successfully created on the Leaf Homeo Care platform.</p>
+            
+            <div class="info-box">
+              <p><strong>📧 Email:</strong> ${email}</p>
+              <p><strong>📱 Mobile:</strong> ${mobile}</p>
+              <p><strong>🩺 Role:</strong> Doctor</p>
+            </div>
+
+            <p class="welcome-text">To get started, please set up your password by clicking the button below:</p>
+
+            <div class="button-container">
+              <a href="${resetLink}" class="button">Set Your Password</a>
+            </div>
+
+            <div class="security-note">
+              <strong>🔒 Security Notice:</strong>
+              <p>This link will expire in 24 hours for your security. If you did not request this account creation, please ignore this email.</p>
+            </div>
+
+            <p class="welcome-text">If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+
+            <p class="welcome-text">Best regards,<br>The Leaf Homeo Care Team</p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Leaf Homeo Care. All rights reserved.</p>
+            <p>This is an automated email. Please do not reply directly.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
-      subject: "Doctor Account Created",
-      html: `
-        <h3>Welcome Dr. ${name}</h3>
-        <p>Your account has been created successfully.</p>
-
-        <p><b>Email:</b> ${email}</p>
-        <p><b>Password:</b> ${plainPassword}</p>
-
-        <p>Please login and change your password.</p>
-      `,
+      subject: "Welcome to Leaf Homeo Care - Set Your Password",
+      html: emailTemplate,
     });
 
     return res.status(201).json({
@@ -131,7 +282,7 @@ exports.GetDoctors = async (req, res, next) => {
         {
           model: User,
           as: "user",
-          attributes: ["name", "email", "mobile","image"],
+          attributes: ["name", "email", "mobile", "image", "isPasswordSet"],
           required: false,
         },
       ],

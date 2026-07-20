@@ -1,6 +1,7 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
-const { ChatMessage, User } = require("../models");
+const { ChatMessage, User, Appointment, Patient, Doctor } = require("../models");
+const { Op } = require("sequelize");
 
 // Rate limiting store (in-memory for simplicity, use Redis in production)
 const rateLimitStore = new Map();
@@ -71,6 +72,32 @@ const initSocket = (server) => {
         if ((!message || message.trim() === "") && !attachmentUrl) {
           if (callback) callback({ status: 0, error: "Message content or attachment is required" });
           return;
+        }
+
+        // Check if patient has paid appointment with doctor
+        if (socket.user.role === "patient") {
+          const patient = await Patient.findOne({ where: { userId } });
+          if (patient) {
+            // Get Doctor ID from User ID
+            const doctor = await Doctor.findOne({ where: { userId: receiverId } });
+            
+            if (!doctor) {
+              if (callback) callback({ status: 0, error: "Doctor not found" });
+              return;
+            }
+
+            const paidAppointment = await Appointment.findOne({
+              where: {
+                patientId: patient.id,
+                doctorId: doctor.id,
+                status: "paid"
+              }
+            });
+            if (!paidAppointment) {
+              if (callback) callback({ status: 0, error: "You can only chat with doctors after completing payment" });
+              return;
+            }
+          }
         }
 
         // Rate limiting check

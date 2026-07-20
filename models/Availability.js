@@ -27,19 +27,11 @@ const Availability = sequelize.define(
       allowNull: false,
     },
     startTime: {
-      type: DataTypes.TIME,
+      type: DataTypes.STRING,
       allowNull: false,
+      comment: "Time slot in HH:MM format (e.g., 09:00, 09:30)",
     },
-    endTime: {
-      type: DataTypes.TIME,
-      allowNull: false,
-    },
-    slotDuration: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 30, // Default slot duration in minutes
-    },
-    IsAvailable: {
+    isAvailable: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },

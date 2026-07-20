@@ -11,7 +11,7 @@ const { AccessToken } = twilio.jwt;
 const { VideoGrant } = AccessToken;
 const Notification = require("../models/Notification");
 
-exports.AvailabilitySlots = async (req,res,next ) =>{
+exports.AvailabilitySlots = async (req,res,next )=>{
   try {
     const { doctorId, date } = req.body;
     if (!doctorId || !date) {
@@ -49,7 +49,7 @@ exports.AvailabilitySlots = async (req,res,next ) =>{
       where: {
         doctorId,
         dayOfWeek,
-        IsAvailable: true
+        isAvailable: true
       }
     });
 
@@ -76,52 +76,21 @@ exports.AvailabilitySlots = async (req,res,next ) =>{
     });
 
     const bookedSlots = appointments.map((a) => {
-
       const d = new Date(a.appointmentDateTime);
-
       return d.toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit"
       });
-
     });
 
-    const slots = [];
+    const slots = availability.map((item) => ({
+      id: item.id,
+      time: item.startTime,
+      available: !bookedSlots.includes(item.startTime)
+    }));
 
-    availability.forEach((item) => {
-
-      let current = new Date(
-        `2000-01-01T${item.startTime}`
-      );
-
-      const end = new Date(
-        `2000-01-01T${item.endTime}`
-      );
-
-      while (current < end) {
-
-        const slot = current.toLocaleTimeString(
-          "en-GB",
-          {
-            hour: "2-digit",
-            minute: "2-digit"
-          }
-        );
-
-        slots.push({
-          time: slot,
-          available: !bookedSlots.includes(slot)
-        });
-
-        current.setMinutes(
-          current.getMinutes() +
-          item.slotDuration
-        );
-
-      }
-
-    });
-
+    console.log(date,dayOfWeek,slots);
+    
     return res.status(200).json({
       status: 1,
       date,
@@ -130,26 +99,20 @@ exports.AvailabilitySlots = async (req,res,next ) =>{
     });
 
   } catch (error) {
-
     console.log(error);
-
     return res.status(500).json({
       status: 0,
       message: error.message
     });
-
   }
-
 }
 exports.AppointmentBooking = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    console.log("Patient ID from token:", userId); // Log the patient ID for debugging
+    console.log("Patient ID from token:", userId);
 
     const patient = await Patient.findOne({
-      where: {
-        userId
-      }
+      where: { userId }
     });
 
     if (!patient) {
@@ -161,15 +124,16 @@ exports.AppointmentBooking = async (req, res, next) => {
 
     const patientId = patient.id;
 
+    const { doctorId, requestType, appointmentDateTime, reason } = req.body;
+    console.log("Request Body:", req.body);
 
-    const { doctorId, requestType,appointmentDateTime ,reason} = req.body;
-    console.log("Request Body:", req.body); // Log the request body for debugging
-   if ( !requestType || !appointmentDateTime) {
+    if (!requestType || !appointmentDateTime) {
       return res.status(400).json({
         status: 0,
         message: "Required fields are missing",
       });
     }
+
     if (requestType === "specific_doctor" && !doctorId) {
       return res.status(400).json({
         status: 0,
@@ -186,79 +150,115 @@ exports.AppointmentBooking = async (req, res, next) => {
           message: "Doctor not found",
         });
       }
+
+      // Validate slot availability for specific_doctor requests
+      const appointmentDate = new Date(appointmentDateTime);
+      const dayOfWeek = appointmentDate.toLocaleDateString("en-US", {
+        weekday: "long",
+      }).toLowerCase();
+
+      const slotTime = appointmentDate.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+
+      // Check if the slot exists in doctor's availability
+      const availabilitySlot = await Availability.findOne({
+        where: {
+          doctorId,
+          dayOfWeek,
+          startTime: slotTime,
+          isAvailable: true
+        }
+      });
+
+      if (!availabilitySlot) {
+        return res.status(400).json({
+          status: 0,
+          message: "Selected time slot is not available for this doctor",
+        });
+      }
+
+      // Check if the slot is already booked
+      const startOfDay = `${appointmentDate.toISOString().split('T')[0]} 00:00:00`;
+      const endOfDay = `${appointmentDate.toISOString().split('T')[0]} 23:59:59`;
+
+      const existingAppointment = await Appointment.findOne({
+        where: {
+          doctorId,
+          status: { [Op.notIn]: ["cancelled"] },
+          appointmentDateTime: {
+            [Op.between]: [startOfDay, endOfDay]
+          }
+        }
+      });
+
+      if (existingAppointment) {
+        const existingSlotTime = new Date(existingAppointment.appointmentDateTime).toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+
+        if (existingSlotTime === slotTime) {
+          return res.status(400).json({
+            status: 0,
+            message: "This time slot is already booked",
+          });
+        }
+      }
     }
 
     const appointment = await Appointment.create({
       patientId,
       doctorId: requestType === "specific_doctor" ? doctorId : null,
-        requestType,
-        appointmentDateTime,
-        reason,
+      requestType,
+      appointmentDateTime,
+      reason,
     });
-if(requestType === "specific_doctor") {
+
+    if (requestType === "specific_doctor") {
       // Send notification to the specific doctor
       const doctor = await Doctor.findByPk(doctorId);
-await Notification.create({
+      await Notification.create({
         userId: doctor.userId,
         senderId: userId,
-
         title: "New Appointment Request",
-
-        message:
-          "You have received a new appointment request.",
-
+        message: "You have received a new appointment request.",
         type: "appointment",
-
         referenceId: appointment.id,
       });
-
     }
 
     if (requestType === "any_doctor") {
       // Send notification to all expert doctors
-   const doctors = await Doctor.findAll({
+      const doctors = await Doctor.findAll({
         attributes: ["userId"],
       });
       const notifications = doctors.map((doctor) => ({
         userId: doctor.userId,
-
         senderId: userId,
-
         title: "New Appointment Request",
-
-        message:
-          "A patient has requested a consultation.",
-
+        message: "A patient has requested a consultation.",
         type: "appointment",
-
         referenceId: appointment.id,
-
         isRead: false,
       }));
 
-      await Notification.bulkCreate(
-        notifications
-      );
-
+      await Notification.bulkCreate(notifications);
     }
-return res.status(201).json({
+
+    return res.status(201).json({
       status: 1,
-
-      message:
-        "Appointment booked successfully",
-
+      message: "Appointment booked successfully",
       data: appointment,
     });
 
   } catch (error) {
-
     console.log(error);
-
     return res.status(500).json({
       status: 0,
       message: "Something went wrong",
     });
-
   }
 };        
 
@@ -376,7 +376,7 @@ exports.UpcomingAppointments = async (req, res) => {
         item.doctor?.user?.name,
 
       doctorImage:
-        item.doctor?.user?.image ? `http://localhost:5000/uploads/${item.doctor?.user?.image}` : null,
+        item.doctor?.user?.image ? `http://localhost:5000/${item.doctor?.user?.image}` : null,
 
       specialization:
         item.doctor?.specialization,
@@ -475,7 +475,7 @@ exports.myAppointments = async (req, res) => {
       id: item.id,
       doctorUserId: item.doctor?.userId,
       doctorName: item.doctor?.user?.name,
-      doctorImage: item.doctor?.user?.image ? `http://localhost:5000/uploads/${item.doctor?.user?.image}` : null,
+      doctorImage: item.doctor?.user?.image ? `http://localhost:5000/${item.doctor?.user?.image}` : null,
       status: item.status,
       appointmentDateTime: item.appointmentDateTime
     }));

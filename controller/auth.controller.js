@@ -681,6 +681,66 @@ exports.ResetPassword = async (req, res) => {
   }
 };
 
+exports.SetupPassword = async (req, res) => {
+  try {
+    const { token, email, password } = req.body;
+
+    if (!token || !email || !password) {
+      return res.status(400).json({
+        status: 0,
+        message: "All fields are required",
+      });
+    }
+
+    const user = await User.findOne({
+      where: { email },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        status: 0,
+        message: "User not found",
+      });
+    }
+
+    if (user.resetPasswordToken !== token) {
+      return res.status(400).json({
+        status: 0,
+        message: "Invalid or expired token",
+      });
+    }
+
+    if (new Date() > user.resetPasswordExpires) {
+      return res.status(400).json({
+        status: 0,
+        message: "Token has expired",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await user.update({
+      password: hashedPassword,
+      resetPasswordToken: null,
+      resetPasswordExpires: null,
+      isPasswordSet: true,
+    });
+
+    return res.status(200).json({
+      status: 1,
+      message: "Password set successfully",
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong",
+    });
+  }
+};
+
 exports.NotificationList = async (req, res, next) => {
  const userId = req.user.id;
   try {

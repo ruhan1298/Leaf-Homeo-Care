@@ -19,6 +19,39 @@ exports.getChatHistory = async (req, res) => {
       });
     }
 
+    // Check if patient has paid appointment with doctor
+    if (req.user.role === "patient") {
+      const patient = await Patient.findOne({ where: { userId: currentUserId } });
+      console.log("Chat check - Patient:", patient?.id, "Doctor User ID:", otherUserId);
+      if (patient) {
+        // Get Doctor ID from User ID
+        const doctor = await Doctor.findOne({ where: { userId: otherUserId } });
+        console.log("Doctor found:", doctor?.id);
+        
+        if (!doctor) {
+          return res.status(403).json({
+            status: 0,
+            message: "Doctor not found"
+          });
+        }
+
+        const paidAppointment = await Appointment.findOne({
+          where: {
+            patientId: patient.id,
+            doctorId: doctor.id,
+            status: "paid"
+          }
+        });
+        console.log("Paid appointment found:", paidAppointment);
+        if (!paidAppointment) {
+          return res.status(403).json({
+            status: 0,
+            message: "You can only chat with doctors after completing payment"
+          });
+        }
+      }
+    }
+
     const { count, rows: messages } = await ChatMessage.findAndCountAll({
       where: {
         [Op.or]: [
@@ -83,7 +116,10 @@ exports.getContacts = async (req, res) => {
       const patient = await Patient.findOne({ where: { userId: currentUserId } });
       if (patient) {
         const appointments = await Appointment.findAll({
-          where: { patientId: patient.id },
+          where: { 
+            patientId: patient.id,
+            status: "paid"
+          },
           include: [
             {
               model: Doctor,
@@ -443,34 +479,25 @@ exports.uploadAttachment = async (req, res) => {
   }
 };
 
-// Send structured medical message
-exports.sendMedicalMessage = async (req, res) => {
+// Send simple message
+exports.sendMessage = async (req, res) => {
   try {
     const currentUserId = req.user.id;
-    const { receiverId, messageType, medicalData, message } = req.body;
+    const { receiverId, message } = req.body;
 
-    if (!receiverId || !messageType) {
+    if (!receiverId || !message) {
       return res.status(400).json({
         status: 0,
-        message: "Receiver ID and message type are required"
+        message: "Receiver ID and message are required"
       });
     }
 
-    const validMessageTypes = ['text', 'symptom_report', 'prescription', 'appointment_reminder', 'lab_result'];
-    if (!validMessageTypes.includes(messageType)) {
-      return res.status(400).json({
-        status: 0,
-        message: "Invalid message type"
-      });
-    }
-
-    // Create medical message
+    // Create simple text message
     const chatMessage = await ChatMessage.create({
       senderId: currentUserId,
       receiverId: parseInt(receiverId, 10),
-      message: message || null,
-      messageType,
-      medicalData: medicalData || null,
+      message: message,
+      messageType: 'text',
       isRead: false
     });
 
@@ -485,7 +512,6 @@ exports.sendMedicalMessage = async (req, res) => {
       receiverId: chatMessage.receiverId,
       message: chatMessage.message,
       messageType: chatMessage.messageType,
-      medicalData: chatMessage.medicalData,
       isRead: chatMessage.isRead,
       createdAt: chatMessage.createdAt,
       sender: sender ? {
@@ -497,11 +523,11 @@ exports.sendMedicalMessage = async (req, res) => {
 
     return res.status(200).json({
       status: 1,
-      message: "Medical message sent successfully",
+      message: "Message sent successfully",
       data: formattedMessage
     });
   } catch (error) {
-    console.error("❌ Error sending medical message:", error);
+    console.error("❌ Error sending message:", error);
     return res.status(500).json({ 
       status: 0, 
       message: "Internal server error" 

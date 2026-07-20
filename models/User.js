@@ -53,6 +53,10 @@ const User = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
       
+    },
+    isPasswordSet: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     }
   },
 

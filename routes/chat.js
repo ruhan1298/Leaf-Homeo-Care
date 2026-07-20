@@ -12,8 +12,7 @@ router.get("/appointment/:otherUserId", authMiddleware, chatController.getAppoin
 // router.get("/prescription-templates", authMiddleware, chatController.getPrescriptionTemplates);
 router.put("/message/:messageId", authMiddleware, chatController.editMessage);
 router.delete("/message/:messageId", authMiddleware, chatController.deleteMessage);
-// Temporarily disabled - frontend developer overwhelmed
-// router.post("/upload", authMiddleware, upload.single("file"), chatController.uploadAttachment);
-// router.post("/medical", authMiddleware, chatController.sendMedicalMessage);
+router.post("/upload", authMiddleware, upload.single("file"), chatController.uploadAttachment);
+router.post("/send", authMiddleware, chatController.sendMessage);
 
 module.exports = router;
