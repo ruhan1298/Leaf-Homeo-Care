@@ -1,6 +1,6 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { User, Doctor, Patient,Appointment,Payment, Availability } = require("../models");
+const { User, Doctor, Patient,Appointment,Payment, Availability,Review} = require("../models");
 const { Op } = require("sequelize");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
@@ -215,6 +215,18 @@ exports.AppointmentBooking = async (req, res, next) => {
       appointmentDateTime,
       reason,
     });
+
+
+
+appointment.appointmentId = `APT-${String(appointment.id).padStart(5, "0")}`;
+
+console.log("Appointment ID:", appointment.appointmentId);
+
+
+
+
+await appointment.save();
+console.log("Saved Appointment:", appointment.toJSON());
 
     if (requestType === "specific_doctor") {
       // Send notification to the specific doctor
@@ -496,6 +508,8 @@ exports.myAppointments = async (req, res) => {
     });
   }
 };
+
+
 exports.CancelAppointment = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -765,3 +779,139 @@ exports.EndVideoCall = async (req, res) => {
     });
   }
 };
+exports.AppointmentDetails = async (req, res) => {
+  try {
+    const { appointmentId } = req.body;
+
+    if (!appointmentId) {
+      return res.status(400).json({ status: 0, message: "appointmentId is required" });
+    }
+
+    const appointment = await Appointment.findOne({
+      where: { id: appointmentId },
+      include: [
+        {
+          model: Doctor,
+          as: "doctor",
+          attributes: ["id", "specialization", "qualification", "experience", "consultationFee", "bio"],
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "name", "image"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ status: 0, message: "Appointment not found" });
+    }
+
+    const doctorData = appointment.doctor
+      ? {
+          id: appointment.doctor.id,
+          name: appointment.doctor.user?.name || null,
+          image: appointment.doctor.user?.image || null,
+          specialization: appointment.doctor.specialization,
+          qualification: appointment.doctor.qualification,
+          experience: appointment.doctor.experience,
+        }
+      : null;
+
+    const responseData = {
+      id: appointment.id,
+      appointmentId:appointment.appointmentId,
+      status: appointment.status,
+      requestType: appointment.requestType,
+      appointmentDateTime: appointment.appointmentDateTime,
+      reason: appointment.reason,
+      createdAt: appointment.createdAt,
+      acceptedAt: appointment.acceptedAt,
+      doctor: doctorData,
+    };
+
+    return res.status(200).json({
+      status: 1,
+      message: "Appointment details fetched successfully",
+      data: responseData,
+    });
+  } catch (error) {
+    console.error("AppointmentDetails error:", error);
+    return res.status(500).json({ status: 0, message: "Something went wrong", error: error.message });
+  }
+};
+exports.Review = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { appointmentId, rating, review } = req.body;
+
+    if (!appointmentId || !rating) {
+      return res.status(400).json({
+        status: 0,
+        message: "Appointment ID and rating are required",
+      });
+    }
+
+    const patient = await Patient.findOne({
+      where: { userId },
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        status: 0,
+        message: "Patient not found",
+      });
+    }
+
+    const appointment = await Appointment.findOne({
+      where: {
+        id: appointmentId,
+        patientId: patient.id,
+        status: "completed",
+      },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        status: 0,
+        message: "Completed appointment not found",
+      });
+    }
+
+    const alreadyReviewed = await Review.findOne({
+      where: {
+        appointmentId,
+      },
+    });
+
+    if (alreadyReviewed) {
+      return res.status(400).json({
+        status: 0,
+        message: "Review already submitted for this appointment",
+      });
+    }
+
+    await Review.create({
+      appointmentId,
+      doctorId: appointment.doctorId,
+      patientId: patient.id,
+      rating,
+      review,
+    });
+
+    return res.status(201).json({
+      status: 1,
+      message: "Review submitted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: 0,
+      message: "Internal server error",
+    });
+  }
+};
+

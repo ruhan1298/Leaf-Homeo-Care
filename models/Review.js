@@ -1,8 +1,8 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
 
-const Doctor = sequelize.define(
-  "Doctor",
+const Review = sequelize.define(
+  "Review",
   {
     id: {
       type: DataTypes.INTEGER,
@@ -10,44 +10,39 @@ const Doctor = sequelize.define(
       primaryKey: true,
     },
 
-    userId: {
+    appointmentId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      unique: true, // One review per appointment
+    },
+
+    doctorId: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
 
-   specialization: {
-  type: DataTypes.ARRAY(DataTypes.STRING),
-  allowNull: false,
-},
-
-    qualification: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-
-    experience: {
+    patientId: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
 
-    consultationFee: {
-      type: DataTypes.DECIMAL(10, 2),
+    rating: {
+      type: DataTypes.INTEGER,
       allowNull: false,
+      validate: {
+        min: 1,
+        max: 5,
+      },
     },
 
-    bio: {
+    review: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    IsExpert:{
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
-    }
   },
   {
-    tableName: "doctors",
     timestamps: true,
   }
 );
 
-module.exports = Doctor;
+module.exports = Review;

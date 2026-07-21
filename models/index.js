@@ -6,6 +6,7 @@ const Payment = require("./Payment");
 const Notification = require("./Notification");
 const Availability = require("./Availability"); 
 const ChatMessage = require("./ChatMessage");
+const Review = require('./Review')
 /*
 
  User Relations with Doctor 
@@ -111,6 +112,38 @@ ChatMessage.belongsTo(User, {
   foreignKey: "receiverId",
   as: "receiver",
 });
+// Doctor
+Doctor.hasMany(Review, {
+  foreignKey: "doctorId",
+  as: "reviews",
+});
+
+Review.belongsTo(Doctor, {
+  foreignKey: "doctorId",
+  as: "doctor",
+});
+
+// Patient
+Patient.hasMany(Review, {
+  foreignKey: "patientId",
+  as: "reviews",
+});
+
+Review.belongsTo(Patient, {
+  foreignKey: "patientId",
+  as: "patient",
+});
+
+// Appointment
+Appointment.hasOne(Review, {
+  foreignKey: "appointmentId",
+  as: "review",
+});
+
+Review.belongsTo(Appointment, {
+  foreignKey: "appointmentId",
+  as: "appointment",
+});
 
 console.log("✅ Model Relations Loaded");
 
@@ -122,5 +155,6 @@ module.exports = {
   Payment,
   Notification,
   Availability,
-  ChatMessage
+  ChatMessage,
+  Review
 };

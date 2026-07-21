@@ -11,4 +11,6 @@ router.get('/my-appointments', authMiddleware, appointmentController.myAppointme
 router.post('/cancel-appointment', authMiddleware, appointmentController.CancelAppointment);
 router.post('/get-video-token', authMiddleware, appointmentController.GetVideoToken);
 router.post('/end-video-call', authMiddleware, appointmentController.EndVideoCall);
+router.post('/appointment-details',authMiddleware, appointmentController.AppointmentDetails)
+router.post('/review',authMiddleware,appointmentController.Review)
 module.exports = router;

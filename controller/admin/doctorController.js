@@ -20,6 +20,14 @@ exports.AddDoctor = async (req, res, next) => {
       bio,
       IsExpert,
     } = req.body;
+    console.log(req.body,"BODY");
+    
+    if (!Array.isArray(specialization) || specialization.length === 0) {
+  return res.status(400).json({
+    status: 0,
+    message: "At least one specialization is required",
+  });
+}
 
     const existingUser = await User.findOne({
       where: {
@@ -355,7 +363,12 @@ exports.UpdateDoctor = async (req, res, next) => {
       bio,
       IsExpert,
     } = req.body;
-
+if (!Array.isArray(specialization) || specialization.length === 0) {
+  return res.status(400).json({
+    status: 0,
+    message: "At least one specialization is required",
+  });
+}
     const doctor = await Doctor.findByPk(doctorId);
     if (!doctor) {
       return res.status(404).json({
