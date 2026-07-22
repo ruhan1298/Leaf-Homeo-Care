@@ -17,7 +17,7 @@ exports.register = async (req, res, next) => {
     const { name, email, mobile, password } = req.body;
 
     // Validation
-    if (!name || !email || !mobile || !password) {
+    if (!name || !email || !mobile || !password  )  {
       return res.status(400).json({
         status: 0,
         message: "All fields are required",
@@ -897,6 +897,44 @@ exports.NotificationList = async (req, res) => {
     return res.status(200).json({
       status: 1,
       message: "User deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      status: 0,
+      message: "Something went wrong",
+    });
+  }
+};
+
+exports.UpdateFcmToken = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({
+        status: 0,
+        message: "FCM token is required",
+      });
+    }
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: 0,
+        message: "User not found",
+      });
+    }
+
+    user.fcmToken = fcmToken;
+    await user.save();
+
+    return res.status(200).json({
+      status: 1,
+      message: "FCM token updated successfully",
     });
   } catch (error) {
     console.error(error);

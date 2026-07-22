@@ -15,5 +15,5 @@ router.post('/reset-password', authController.ResetPassword);
 router.post('/setup-password', authController.SetupPassword);
 router.get('/delete-user', authmiddleware, authController.DeleteUser);
 router.get('/get-notifications', authmiddleware, authController.NotificationList);
-
+router.post('/add-token',authmiddleware,authController.UpdateFcmToken)
 module.exports = router;

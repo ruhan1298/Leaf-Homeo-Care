@@ -6,14 +6,71 @@ const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const JWT_SECRET = process.env.JWT_SECRET;
 const Sequelize = require("sequelize");
-
+const admin = require('../config/firebase')
 
 exports.ExpertDoctors = async (req, res, next) => {
-  try {
+try {
+    const { search = "" } = req.body;
+
+    const whereCondition = {
+      IsExpert: true,
+    };
+
+    if (search.trim()) {
+      whereCondition[Op.or] = [
+        Sequelize.where(
+          Sequelize.col("user.name"),
+          {
+            [Op.iLike]: `%${search}%`,
+          }
+        ),
+
+        Sequelize.where(
+          Sequelize.cast(
+            Sequelize.col("Doctor.specialization"),
+            "TEXT"
+          ),
+          {
+            [Op.iLike]: `%${search}%`,
+          }
+        ),
+
+        {
+          qualification: {
+            [Op.iLike]: `%${search}%`,
+          },
+        },
+
+        {
+          bio: {
+            [Op.iLike]: `%${search}%`,
+          },
+        },
+
+        Sequelize.where(
+          Sequelize.cast(
+            Sequelize.col("Doctor.experience"),
+            "TEXT"
+          ),
+          {
+            [Op.iLike]: `%${search}%`,
+          }
+        ),
+
+        Sequelize.where(
+          Sequelize.cast(
+            Sequelize.col("Doctor.consultationFee"),
+            "TEXT"
+          ),
+          {
+            [Op.iLike]: `%${search}%`,
+          }
+        ),
+      ];
+    }
+
     const expertDoctors = await Doctor.findAll({
-      where: {
-        IsExpert: true,
-      },
+      where: whereCondition,
       include: [
         {
           model: User,
@@ -30,6 +87,7 @@ exports.ExpertDoctors = async (req, res, next) => {
         [Sequelize.col("user.name"), "name"],
         [Sequelize.col("user.image"), "image"],
       ],
+      order: [["createdAt", "DESC"]],
     });
 
     return res.status(200).json({
@@ -39,11 +97,13 @@ exports.ExpertDoctors = async (req, res, next) => {
     });
   } catch (error) {
     console.error(error);
+
     return res.status(500).json({
       status: 0,
       message: "Something went wrong",
     });
   }
+
 };
 exports.DoctorDetails = async (req, res) => {
   try {
@@ -274,3 +334,129 @@ if (!patient) {
     });
   }
 };
+
+exports.SendNotification = async (req, res) => {
+  try {
+    const { userId, title, body } = req.body;
+
+    if (!userId || !title || !body) {
+      return res.status(400).json({
+        status: 0,
+        message: "userId, title and body are required",
+      });
+    }
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: 0,
+        message: "User not found",
+      });
+    }
+
+    if (!user.fcmToken) {
+      return res.status(400).json({
+        status: 0,
+        message: "User FCM token not found",
+      });
+    }
+
+    const message = {
+      token: user.fcmToken,
+      notification: {
+        title,
+        body,
+      },
+    };
+
+    const response = await admin.messaging().send(message);
+
+    return res.status(200).json({
+      status: 1,
+      message: "Notification sent successfully",
+      messageId: response,
+    });
+  } catch (error) {
+    console.error("FCM Error:", error);
+
+    return res.status(500).json({
+      status: 0,
+      message: error.message,
+    });
+  }
+};
+// exports.Search = async (req, res) => {
+//   try {
+//     const { search = "" } = req.body;
+
+//     const doctors = await Doctor.findAll({
+//       where: {
+//         IsExpert: true,
+//         ...(search && {
+//           [Op.or]: [
+//             Sequelize.where(Sequelize.col("user.name"), {
+//               [Op.iLike]: `%${search}%`,
+//             }),
+
+//             {
+//               specialization: {
+//                 [Op.overlap]: [search],
+//               },
+//             },
+
+//             {
+//               qualification: {
+//                 [Op.iLike]: `%${search}%`,
+//               },
+//             },
+
+//             Sequelize.where(
+//               Sequelize.cast(Sequelize.col("Doctor.experience"), "TEXT"),
+//               {
+//                 [Op.iLike]: `%${search}%`,
+//               }
+//             ),
+
+//             Sequelize.where(
+//               Sequelize.cast(
+//                 Sequelize.col("Doctor.consultationFee"),
+//                 "TEXT"
+//               ),
+//               {
+//                 [Op.iLike]: `%${search}%`,
+//               }
+//             ),
+
+//             {
+//               bio: {
+//                 [Op.iLike]: `%${search}%`,
+//               },
+//             },
+//           ],
+//         }),
+//       },
+//       include: [
+//         {
+//           model: User,
+//           as: "user",
+//           attributes: ["id", "name", "email", "mobile", "image"],
+//         },
+//       ],
+//       order: [["createdAt", "DESC"]],
+//     });
+
+//     return res.status(200).json({
+//       status: 1,
+//       message: "Expert doctors fetched successfully",
+//       data: doctors,
+//     });
+//   } catch (error) {
+//     console.error(error);
+
+//     return res.status(500).json({
+//       status: 0,
+//       message: error.message,
+//     });
+//   }
+// };

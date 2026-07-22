@@ -4,6 +4,7 @@ const nodemailer = require("nodemailer");
 const JWT_SECRET = process.env.JWT_SECRET;
 const Sequelize = require("sequelize");
 const twilio = require('twilio');
+const admin = require("../../config/firebase")
 
 const { User, Doctor, Patient, Appointment, Payment ,Availability} = require("../../models");
 
@@ -198,17 +199,39 @@ appointment.roomName = `room_${appointmentId}_${Date.now()}`;
 
 const patient = await Patient.findByPk(appointment.patientId);
 console.log(patient, "PATIENT");
+const doctorUser = await User.findByPk(doctor.userId);
+
 
 const notification = await Notification.create({
   userId: patient.userId,
   senderId: doctor.userId,
   title: "Appointment Accepted",
-  message: "Your appointment has been accepted.",
+  message: `Dr. ${doctorUser.name} has accepted your appointment. Please complete your payment to confirm your consultation.`,
   type: "appointment",
   referenceId: appointment.id
 });
 
 console.log(notification, "NOTIFICATION CREATED");
+const patientUser = await User.findByPk(patient.userId);
+console.log(doctorUser,"USER");
+
+
+
+if (patientUser && patientUser.fcmToken) {
+  try {
+    await admin.messaging().send({
+      token: patientUser.fcmToken,
+     notification: {
+        title: "Appointment Confirmed",
+        body: `Dr. ${doctorUser.name} has accepted your appointment. Please complete your payment to confirm your consultation.`,
+      },
+    });
+
+    console.log("Push notification sent successfully");
+  } catch (err) {
+    console.error("FCM Error:", err.message);
+  }
+}
 
     return res.status(200).json({
 

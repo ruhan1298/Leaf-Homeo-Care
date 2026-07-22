@@ -57,7 +57,11 @@ const User = sequelize.define(
     isPasswordSet: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
-    }
+    },
+    fcmToken: {
+  type: DataTypes.TEXT,
+  allowNull: true,
+},
   },
 
   {
