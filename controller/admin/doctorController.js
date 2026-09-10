@@ -82,15 +82,19 @@ exports.AddDoctor = async (req, res, next) => {
     let emailError = null;
 
     try {
+      console.log("Attempting to send email to:", email);
+      console.log("Email user configured:", process.env.EMAIL_USER ? "Yes" : "No");
+      console.log("Email pass configured:", process.env.EMAIL_PASS ? "Yes" : "No");
+
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
           user: process.env.EMAIL_USER,
           pass: process.env.EMAIL_PASS,
         },
-        connectionTimeout: 10000, // 10 seconds
-        greetingTimeout: 5000, // 5 seconds
-        socketTimeout: 10000, // 10 seconds
+        connectionTimeout: 15000, // 15 seconds
+        greetingTimeout: 10000, // 10 seconds
+        socketTimeout: 15000, // 15 seconds
         // Force IPv4 to avoid IPv6 connectivity issues
         host: "smtp.gmail.com",
         port: 587,
@@ -255,20 +259,13 @@ exports.AddDoctor = async (req, res, next) => {
         </html>
       `;
 
-      // Add timeout to the email sending
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Email sending timeout")), 8000); // 8 seconds timeout
+      // Send email without artificial timeout - let nodemailer handle connection timeouts
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "Welcome to Leaf Homeo Care - Set Your Password",
+        html: emailTemplate,
       });
-
-      await Promise.race([
-        transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: email,
-          subject: "Welcome to Leaf Homeo Care - Set Your Password",
-          html: emailTemplate,
-        }),
-        timeoutPromise
-      ]);
 
       emailStatus = "sent";
       console.log("Email sent successfully to:", email);
@@ -276,6 +273,12 @@ exports.AddDoctor = async (req, res, next) => {
       emailStatus = "failed";
       emailError = emailError.message;
       console.error("Failed to send email:", emailError);
+      console.error("Email error details:", {
+        code: emailError.code,
+        command: emailError.command,
+        response: emailError.response,
+        responseCode: emailError.responseCode
+      });
     }
 
     // Prepare response message based on email status
