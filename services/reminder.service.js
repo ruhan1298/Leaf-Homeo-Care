@@ -7,9 +7,20 @@ const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
   port: process.env.EMAIL_PORT || 587,
   secure: false,
+  family: 4, // Force IPv4 to avoid IPv6 connectivity issues
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 5000, // 5 seconds
+  socketTimeout: 10000, // 10 seconds
+  tls: {
+    rejectUnauthorized: false
+  },
+  // Additional DNS resolution options
+  dns: {
+    family: 4 // Force IPv4 DNS resolution
   }
 });
 

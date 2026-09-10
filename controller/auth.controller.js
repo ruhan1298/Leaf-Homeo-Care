@@ -554,6 +554,21 @@ exports.ForgetPassword = async (req, res) => {
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
+      },
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 5000, // 5 seconds
+      socketTimeout: 10000, // 10 seconds
+      // Force IPv4 to avoid IPv6 connectivity issues
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      family: 4, // Force IPv4
+      tls: {
+        rejectUnauthorized: false
+      },
+      // Additional DNS resolution options
+      dns: {
+        family: 4 // Force IPv4 DNS resolution
       }
     });
     console.log(process.env.EMAIL_USER);

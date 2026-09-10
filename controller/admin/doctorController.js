@@ -88,15 +88,20 @@ exports.AddDoctor = async (req, res, next) => {
           user: process.env.EMAIL_USER,
           pass: process.env.EMAIL_PASS,
         },
-        connectionTimeout: 5000, // 5 seconds
-        greetingTimeout: 3000, // 3 seconds
-        socketTimeout: 5000, // 5 seconds
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 5000, // 5 seconds
+        socketTimeout: 10000, // 10 seconds
         // Force IPv4 to avoid IPv6 connectivity issues
         host: "smtp.gmail.com",
         port: 587,
         secure: false,
+        family: 4, // Force IPv4
         tls: {
           rejectUnauthorized: false
+        },
+        // Additional DNS resolution options
+        dns: {
+          family: 4 // Force IPv4 DNS resolution
         }
       });
 
