@@ -1,0 +1,138 @@
+var createError = require('http-errors');
+var express = require('express');
+console.log(express);
+console.log("RAW =", express.raw);
+var path = require('path');
+var cookieParser = require('cookie-parser');
+var logger = require('morgan');
+const multer = require('multer');
+const sequelize = require("./config/database");
+const User = require("./models/User");
+const Doctor = require("./models/Doctor");
+const Patient = require("./models/Patient");
+const Appointment = require("./models/Appointment");
+const Payment = require("./models/Payment");
+// const Prescription = require("./models/Prescription");
+const bodyParser = require("body-parser");
+
+require("./models");
+
+
+
+var indexRouter = require('./routes/index');
+var authRouter = require('./routes/auth');
+var adminRouter = require('./routes/Admin/adminRoute');
+var PatientRouter = require('./routes/patient');
+var appointmentRouter = require('./routes/appointment');
+var doctorRouter = require('./routes/doctor');
+var paymentRouter = require('./routes/payment');
+var chatRouter = require('./routes/chat');
+var blogRouter = require('./routes/blog');
+var couponRouter = require('./routes/coupon');
+ const cors = require("cors");
+
+var app = express();
+
+
+// view engine setup
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'jade');
+
+
+
+app.use(cors());
+app.use(logger('dev'));
+
+
+
+
+
+app.use("/api/v1/payment/webhook", (req, res, next) => {
+  console.log("Webhook Request Received");
+  next();
+});
+
+app.use(
+  "/api/v1/payment/webhook",
+  bodyParser.raw({ type: "application/json" })
+);
+
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.use('/', indexRouter);
+app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/admin", adminRouter);// catch 404 and forward to error handler
+app.use("/api/v1/patient", PatientRouter);
+app.use("/api/v1/appointment", appointmentRouter);
+app.use("/api/v1/doctor", doctorRouter);
+app.use('/api/v1/payment',paymentRouter);
+app.use('/api/v1/chat', chatRouter);
+app.use('/api/v1/blog', blogRouter);
+app.use('/api/v1', couponRouter);
+
+// Multer error handler
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    console.error('=== MULTER ERROR ===');
+    console.error('MulterError:', err);
+    return res.status(400).json({ 
+      status: 0, 
+      message: 'File upload error', 
+      error: err.message 
+    });
+  }
+  next(err);
+});
+
+app.use(function(req, res, next) {
+  next(createError(404));
+});
+
+
+sequelize
+  .authenticate()
+  .then(() => {
+    console.log("✅ Database Connected Successfully");
+  })
+  .catch((error) => {
+    console.error("❌ Database Connection Failed:", error);
+  });
+sequelize
+  .sync({ alter: true })
+  .then(() => {
+    console.log("✅ Tables Synced");
+
+    // Start reminder cron job
+    const { runReminderChecks } = require('./services/reminder.service');
+
+    // Run every hour using setInterval (compatible with Node.js 16)
+    const REMINDER_INTERVAL = 2 * 60 * 1000; // 2 minute for testing
+
+    // Delay first run to avoid immediate execution on server start
+    setTimeout(() => {
+      setInterval(() => {
+        console.log('Running scheduled reminder checks...');
+        runReminderChecks();
+      }, REMINDER_INTERVAL);
+    }, REMINDER_INTERVAL);
+
+    console.log("✅ Reminder System Started (Every 2 Minutes for Testing)");
+  })
+  .catch(console.error);
+// error handler
+app.use(function(err, req, res, next) {
+  // set locals, only providing error in development
+  res.locals.message = err.message;
+  res.locals.error = req.app.get('env') === 'development' ? err : {};
+
+  // render the error page
+  res.status(err.status || 500);
+  res.render('error');
+});
+
+module.exports = app;
