@@ -1,2 +1,5 @@
 .env
-firebase-service-account.jsonnode_modules/
+.env.*
+firebase-service-account.json
+test-twilio-config.js
+node_modules/
