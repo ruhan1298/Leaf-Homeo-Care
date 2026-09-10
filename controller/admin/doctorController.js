@@ -91,6 +91,13 @@ exports.AddDoctor = async (req, res, next) => {
         connectionTimeout: 5000, // 5 seconds
         greetingTimeout: 3000, // 3 seconds
         socketTimeout: 5000, // 5 seconds
+        // Force IPv4 to avoid IPv6 connectivity issues
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        tls: {
+          rejectUnauthorized: false
+        }
       });
 
       const resetLink = `${process.env.FRONTEND_URL}/doctor/setup-password?token=${resetToken}&email=${email}`;
