@@ -17,6 +17,7 @@ jobs:
           script: |
             export PATH=/root/.nvm/versions/node/v24.21.0/bin:$PATH
             cd /root/Leaf-Homeo-Care
-            git pull origin main
+            git fetch origin
+            git reset --hard origin/main
             npm install
             pm2 restart leaf-homeo
