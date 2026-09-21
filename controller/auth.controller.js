@@ -462,18 +462,27 @@ const image = req.file ? req.file.path : null;
     } = req.body;
 
     const user = await User.findByPk(userId, { transaction });
+    console.log("User found:", !!user);
 
-    const patient = await Patient.findOne({
+    let patient = await Patient.findOne({
       where: { userId },
       transaction,
     });
+    console.log("Patient found:", !!patient);
 
-    if (!user || !patient) {
+    // Create Patient if not exists
+    if (!patient) {
+      console.log("Creating Patient record for user:", userId);
+      patient = await Patient.create({
+        userId,
+      }, { transaction });
+    }
+
+    if (!user) {
       await transaction.rollback();
-
       return res.status(404).json({
         status: 0,
-        message: "User/Patient not found",
+        message: "User not found",
       });
     }
 
@@ -500,7 +509,6 @@ const image = req.file ? req.file.path : null;
         pincode,
         country,
         IsCompleteProfile: true,
-        image: image || patient.image, // Update image only if provided
       },
       { transaction }
     );
