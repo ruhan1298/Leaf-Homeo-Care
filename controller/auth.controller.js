@@ -445,6 +445,7 @@ exports.CompleteProfile = async (req, res) => {
 
   try {
     const userId = req.user.id;
+    console.log(userId,"userId");
 const image = req.file ? req.file.path : null;
     const {
       name,
