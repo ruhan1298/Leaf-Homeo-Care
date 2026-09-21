@@ -163,3 +163,41 @@ exports.DeleteBlog = async (req, res, next) => {
     });
   }
 };
+
+// Get blog details by ID for frontend developer
+exports.GetBlogById = async (req, res, next) => {
+  try {
+    const { id } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ status: 0, message: "Blog ID is required" });
+    }
+
+    const blog = await Blog.findByPk(id);
+
+    if (!blog) {
+      return res.status(404).json({ status: 0, message: "Blog not found" });
+    }
+
+    res.status(200).json({
+      status: 1,
+      message: "Blog details fetched successfully",
+      blog: {
+        id: blog.id,
+        Image: blog.Image,
+        title: blog.title,
+        description: blog.description,
+        type: blog.type,
+        createdAt: blog.createdAt,
+        updatedAt: blog.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching blog by ID:", error.message);
+    res.status(500).json({
+      status: 0,
+      message: "Failed to fetch blog details",
+      error: error.message
+    });
+  }
+};
