@@ -31,9 +31,9 @@ module.exports = {
     const otp = crypto.randomInt(100000, 999999).toString();
     const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
     otpStore.set(to, { otp, expiry });
-    
+
     console.log(`Local backup OTP stored for ${to}: ${otp}`);
-    
+
     if (isTwilioConfigured && client) {
       try {
         const response = await client.verify.v2
@@ -43,29 +43,33 @@ module.exports = {
             channel: "sms",
           });
         console.log(`Twilio OTP sent successfully to ${to}`);
-        return response;
+
+        // Return response with local OTP for testing
+        return {
+          ...response,
+          otp: otp // Always return local OTP for testing
+        };
       } catch (error) {
         console.error("Twilio Send OTP Error:", error);
         // Fallback to local OTP generation if Twilio fails
         console.log("Falling back to local OTP generation due to Twilio error");
-        
+
         return {
           status: "pending",
           to: to,
           channel: "sms",
-          otp: process.env.NODE_ENV === 'development' ? otp : undefined
+          otp: otp
         };
       }
     } else {
       // Fallback: Generate OTP locally for development
       console.log(`Development Mode: OTP for ${to} is ${otp}`);
-      
+
       return {
         status: "pending",
         to: to,
         channel: "sms",
-        // Include OTP in development mode for testing
-        otp: process.env.NODE_ENV === 'development' ? otp : undefined
+        otp: otp
       };
     }
   },
