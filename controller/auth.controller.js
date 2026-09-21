@@ -554,32 +554,18 @@ exports.ForgetPassword = async (req, res) => {
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-      },
-      connectionTimeout: 10000, // 10 seconds
-      greetingTimeout: 5000, // 5 seconds
-      socketTimeout: 10000, // 10 seconds
-      // Force IPv4 to avoid IPv6 connectivity issues
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      family: 4, // Force IPv4
-      tls: {
-        rejectUnauthorized: false
-      },
-      // Additional DNS resolution options
-      dns: {
-        family: 4 // Force IPv4 DNS resolution
       }
     });
-    console.log(process.env.EMAIL_USER);
-console.log(process.env.EMAIL_PASS ? "PASS OK" : "PASS MISSING");
+    console.log(transporter,"EMAIL PASS")
 
-    await transporter.sendMail({
+    const mailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
       subject: "Password Reset OTP",
-      text: `Your OTP is ${otp}. It is valid for 10 minutes.`
-    });
+      text: `Your OTP for password reset is: ${otp}. This code is valid for 10 minutes.`
+    };
+
+    await transporter.sendMail(mailOptions);
 
     return res.status(200).json({
       status: 1,
@@ -587,7 +573,7 @@ console.log(process.env.EMAIL_PASS ? "PASS OK" : "PASS MISSING");
     });
 
   } catch (err) {
-    console.log(err);
+    console.error("Email Sending Error:", err);
 
     return res.status(500).json({
       status: 0,
@@ -1045,6 +1031,7 @@ exports.SendPhoneOTP = async (req, res) => {
         data: {
           status: verification.status,
           to: verification.to,
+          otp: verification.otp, // Only in development
           formattedMobile: formattedMobile, // Send formatted number back to frontend
         },
       });

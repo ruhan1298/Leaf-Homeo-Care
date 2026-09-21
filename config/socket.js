@@ -68,6 +68,9 @@ const initSocket = (server) => {
           return;
         }
 
+        // Convert receiverId to integer
+        const numericReceiverId = parseInt(receiverId, 10);
+
         // Allow either message or attachment (or both)
         if ((!message || message.trim() === "") && !attachmentUrl) {
           if (callback) callback({ status: 0, error: "Message content or attachment is required" });
@@ -76,28 +79,39 @@ const initSocket = (server) => {
 
         // Check if patient has paid appointment with doctor
         if (socket.user.role === "patient") {
-          const patient = await Patient.findOne({ where: { userId } });
-          if (patient) {
-            // Get Doctor ID from User ID
-            const doctor = await Doctor.findOne({ where: { userId: receiverId } });
-            
-            if (!doctor) {
-              if (callback) callback({ status: 0, error: "Doctor not found" });
-              return;
-            }
-
-            const paidAppointment = await Appointment.findOne({
-              where: {
-                patientId: patient.id,
-                doctorId: doctor.id,
-                status: "paid"
+          // Check if receiver is admin - admin chat doesn't require payment
+          const receiverUser = await User.findByPk(numericReceiverId);
+          if (receiverUser && receiverUser.role === "admin") {
+            // Allow admin chat without payment restriction
+            console.log("Patient sending message to admin - no payment check required");
+          } else {
+            // Payment check for doctor chat
+            const patient = await Patient.findOne({ where: { userId } });
+            if (patient) {
+              // Get Doctor ID from User ID
+              const doctor = await Doctor.findOne({ where: { userId: numericReceiverId } });
+              
+              if (!doctor) {
+                if (callback) callback({ status: 0, error: "Doctor not found" });
+                return;
               }
-            });
-            if (!paidAppointment) {
-              if (callback) callback({ status: 0, error: "You can only chat with doctors after completing payment" });
-              return;
+
+              const paidAppointment = await Appointment.findOne({
+                where: {
+                  patientId: patient.id,
+                  doctorId: doctor.id,
+                  status: "paid"
+                }
+              });
+              if (!paidAppointment) {
+                if (callback) callback({ status: 0, error: "You can only chat with doctors after completing payment" });
+                return;
+              }
             }
           }
+        } else if (socket.user.role === "admin") {
+          // Admin can send messages to anyone without restrictions
+          console.log("Admin sending message - no restrictions");
         }
 
         // Rate limiting check
@@ -123,7 +137,7 @@ const initSocket = (server) => {
         // Save message to database
         const chatMessage = await ChatMessage.create({
           senderId: userId,
-          receiverId: parseInt(receiverId, 10),
+          receiverId: numericReceiverId,
           message: message ? message.trim() : null,
           appointmentId: appointmentId || null,
           attachmentUrl: attachmentUrl || null,
@@ -158,10 +172,10 @@ const initSocket = (server) => {
         };
 
         // Emit to receiver's private room
-        const receiverRoom = `user_${receiverId}`;
+        const receiverRoom = `user_${numericReceiverId}`;
         io.to(receiverRoom).emit("receive_message", formattedMessage);
 
-        console.log(`✉️ Message sent from ${userId} to ${receiverId}`);
+        console.log(`✉️ Message sent from ${userId} to ${numericReceiverId}`);
 
         // Acknowledge back to sender
         if (callback) {
@@ -179,7 +193,8 @@ const initSocket = (server) => {
     socket.on("typing_start", (data) => {
       const { receiverId } = data;
       if (receiverId) {
-        const receiverRoom = `user_${receiverId}`;
+        const numericReceiverId = parseInt(receiverId, 10);
+        const receiverRoom = `user_${numericReceiverId}`;
         io.to(receiverRoom).emit("user_typing", { userId });
         
         // Store typing state with timeout
@@ -200,7 +215,8 @@ const initSocket = (server) => {
       const { receiverId } = data;
       if (receiverId) {
         typingUsers.delete(userId);
-        const receiverRoom = `user_${receiverId}`;
+        const numericReceiverId = parseInt(receiverId, 10);
+        const receiverRoom = `user_${numericReceiverId}`;
         io.to(receiverRoom).emit("user_stopped_typing", { userId });
       }
     });

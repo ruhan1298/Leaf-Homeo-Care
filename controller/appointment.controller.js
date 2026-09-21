@@ -10,6 +10,7 @@ const twilio = require('twilio');
 const { AccessToken } = twilio.jwt;
 const { VideoGrant } = AccessToken;
 const Notification = require("../models/Notification");
+const shiprocketService = require("../services/shiprocket.service");
 
 exports.AvailabilitySlots = async (req,res,next )=>{
   try {
@@ -1002,6 +1003,131 @@ exports.SubmitConsultation = async (req, res) => {
       status: 0,
       message: "Internal server error",
       error: error.message,
+    });
+  }
+};
+
+exports.updateShippingStatus = async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const { shippingStatus, trackerId } = req.body;
+
+    console.log("Update shipping status request:", { appointmentId, shippingStatus, trackerId });
+
+    if (!appointmentId) {
+      return res.status(400).json({
+        status: 0,
+        message: "Appointment ID is required"
+      });
+    }
+
+    if (!shippingStatus) {
+      return res.status(400).json({
+        status: 0,
+        message: "Shipping status is required"
+      });
+    }
+
+    const validStatuses = ['draft', 'prepared', 'ready_to_transit', 'in_transit'];
+    if (!validStatuses.includes(shippingStatus)) {
+      return res.status(400).json({
+        status: 0,
+        message: "Invalid shipping status"
+      });
+    }
+
+    const appointment = await Appointment.findByPk(appointmentId);
+
+    if (!appointment) {
+      return res.status(404).json({
+        status: 0,
+        message: "Appointment not found"
+      });
+    }
+
+    console.log("Appointment found:", { id: appointment.id, currentStatus: appointment.shippingStatus });
+
+    // Validate forward-only status transitions
+    const statusFlow = {
+      draft: ['prepared'],
+      prepared: ['ready_to_transit'],
+      ready_to_transit: ['in_transit'],
+      in_transit: []
+    };
+
+    const currentStatus = appointment.shippingStatus || 'draft';
+    const allowedNextStatuses = statusFlow[currentStatus] || [];
+
+    console.log("Status validation:", { currentStatus, shippingStatus, allowedNextStatuses });
+
+    if (!allowedNextStatuses.includes(shippingStatus)) {
+      return res.status(400).json({
+        status: 0,
+        message: "Invalid status transition. Can only move forward in shipping status."
+      });
+    }
+
+    const updateData = { shippingStatus };
+
+    // Shiprocket integration when status is ready_to_transit
+    if (shippingStatus === 'ready_to_transit' && shiprocketService.isEnabled()) {
+      console.log("Creating Shiprocket order for appointment:", appointment.id);
+      
+      try {
+        // Get patient details using Sequelize ORM
+        const patient = await Patient.findByPk(appointment.patientId, {
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "name", "mobile", "email"]
+            }
+          ]
+        });
+
+        const patientAddress = {
+          name: patient?.user?.name || "Patient",
+          email: patient?.user?.email || "",
+          mobile: patient?.user?.mobile || "",
+          addressLine1: patient?.addressLine1 || "",
+          addressLine2: patient?.addressLine2 || "",
+          city: patient?.city || "",
+          state: patient?.state || "",
+          pincode: patient?.pincode || "",
+          country: patient?.country || "India"
+        };
+
+        const orderData = shiprocketService.formatOrderData(appointment, patientAddress);
+        const shiprocketResult = await shiprocketService.createOrder(orderData);
+
+        if (shiprocketResult.success && shiprocketResult.trackingId) {
+          updateData.trackerId = shiprocketResult.trackingId;
+          console.log("Shiprocket order created successfully. Tracking ID:", shiprocketResult.trackingId);
+        } else {
+          console.log("Shiprocket order creation failed:", shiprocketResult.message);
+          // Continue with status update even if Shiprocket fails
+        }
+      } catch (error) {
+        console.error("Error in Shiprocket integration:", error);
+        // Continue with status update even if Shiprocket fails
+      }
+    } else if (trackerId) {
+      updateData.trackerId = trackerId;
+    }
+
+    await appointment.update(updateData);
+
+    return res.status(200).json({
+      status: 1,
+      message: "Shipping status updated successfully",
+      data: appointment
+    });
+  } catch (error) {
+    console.error("Error updating shipping status:", error);
+    return res.status(500).json({
+      status: 0,
+      message: "Internal server error",
+      error: error.message
     });
   }
 };

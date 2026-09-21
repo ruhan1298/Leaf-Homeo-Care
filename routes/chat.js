@@ -6,6 +6,8 @@ const chatController = require("../controller/chat.controller");
 
 router.get("/history/:otherUserId", authMiddleware, chatController.getChatHistory);
 router.get("/history-by-appointments/:otherUserId", authMiddleware, chatController.getChatHistoryByAppointments);
+router.get("/appointment-chat/:appointmentId", authMiddleware, chatController.getAppointmentChatHistory);
+router.get("/appointment/:otherUserId", authMiddleware, chatController.getAppointmentContext);
 router.get("/contacts", authMiddleware, chatController.getContacts);
 router.get("/contact/:userId", authMiddleware, chatController.getContactById);
 router.get("/appointment/:otherUserId", authMiddleware, chatController.getAppointmentContext);

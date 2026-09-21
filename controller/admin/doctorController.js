@@ -77,35 +77,12 @@ exports.AddDoctor = async (req, res, next) => {
       IsExpert,
     });
 
-    // Send Email with reset password link with timeout and status tracking
-    let emailStatus = "not_sent";
-    let emailError = null;
-
     try {
-      console.log("Attempting to send email to:", email);
-      console.log("Email user configured:", process.env.EMAIL_USER ? "Yes" : "No");
-      console.log("Email pass configured:", process.env.EMAIL_PASS ? "Yes" : "No");
-
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
           user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-        },
-        connectionTimeout: 15000, // 15 seconds
-        greetingTimeout: 10000, // 10 seconds
-        socketTimeout: 15000, // 15 seconds
-        // Force IPv4 to avoid IPv6 connectivity issues
-        host: "smtp.gmail.com",
-        port: 587,
-        secure: false,
-        family: 4, // Force IPv4
-        tls: {
-          rejectUnauthorized: false
-        },
-        // Additional DNS resolution options
-        dns: {
-          family: 4 // Force IPv4 DNS resolution
+          pass: process.env.EMAIL_PASS
         }
       });
 
@@ -259,42 +236,22 @@ exports.AddDoctor = async (req, res, next) => {
         </html>
       `;
 
-      // Send email without artificial timeout - let nodemailer handle connection timeouts
-      await transporter.sendMail({
+      const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
         subject: "Welcome to Leaf Homeo Care - Set Your Password",
         html: emailTemplate,
-      });
+      };
 
-      emailStatus = "sent";
-      console.log("Email sent successfully to:", email);
+      await transporter.sendMail(mailOptions);
     } catch (emailError) {
-      emailStatus = "failed";
-      emailError = emailError.message;
-      console.error("Failed to send email:", emailError);
-      console.error("Email error details:", {
-        code: emailError.code,
-        command: emailError.command,
-        response: emailError.response,
-        responseCode: emailError.responseCode
-      });
-    }
-
-    // Prepare response message based on email status
-    let responseMessage = "Doctor added successfully";
-    if (emailStatus === "failed") {
-      responseMessage = "Doctor added successfully but email could not be sent. Please check email configuration.";
-    } else if (emailStatus === "sent") {
-      responseMessage = "Doctor added successfully. Welcome email sent.";
+      console.error("Email Sending Error:", emailError);
     }
 
     return res.status(201).json({
       status: 1,
-      message: responseMessage,
-      data: doctor,
-      emailStatus: emailStatus,
-      emailError: emailError || null
+      message: "Doctor added successfully",
+      data: doctor
     });
   } catch (error) {
     console.log(error.message);

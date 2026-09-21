@@ -72,14 +72,18 @@ exports.GetAppointments = async (req, res, next) => {
     // 3. Clean Response Format for Admin Dashboard
     const appointments = rows.map((appt) => ({
       id: appt.id,
+      appointmentId: appt.appointmentId,
       appointmentDate: appt.appointmentDateTime,
       notes: appt.reason,
       reason: appt.reason,
       status: appt.status,
       requestType: appt.requestType,
+      shippingStatus: appt.shippingStatus,
+      trackerId: appt.trackerId,
       patient: appt.patient && appt.patient.user
         ? {
             id: appt.patient.id,
+            userId: appt.patient.user.id,
             name: appt.patient.user.name,
             gender: appt.patient.gender,
             dob: appt.patient.dob,
@@ -99,6 +103,7 @@ exports.GetAppointments = async (req, res, next) => {
       doctor: appt.doctor && appt.doctor.user
         ? {
             id: appt.doctor.id,
+            userId: appt.doctor.user.id,
             name: appt.doctor.user.name,
             specialization: appt.doctor.specialization,
             qualification: appt.doctor.qualification,

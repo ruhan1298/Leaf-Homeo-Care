@@ -3,6 +3,85 @@ const { Op, literal, fn, col } = require("sequelize");
 const sequelize = require("../config/database").sequelize;
 const { upload, getFileType } = require("../middleware/multer");
 
+// Get chat history for a specific appointment (admin monitoring)
+exports.getAppointmentChatHistory = async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { appointmentId } = req.params;
+
+    if (!appointmentId) {
+      return res.status(400).json({ 
+        status: 0, 
+        message: "Appointment ID is required" 
+      });
+    }
+
+    // Convert appointmentId to integer
+    const numericAppointmentId = parseInt(appointmentId, 10);
+
+    // Get appointment details
+    const appointment = await Appointment.findByPk(numericAppointmentId, {
+      include: [
+        { model: Doctor, as: "doctor", include: [{ model: User, as: "user", attributes: ["id", "name", "image"] }] },
+        { model: Patient, as: "patient", include: [{ model: User, as: "user", attributes: ["id", "name", "image"] }] }
+      ]
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ 
+        status: 0, 
+        message: "Appointment not found" 
+      });
+    }
+
+    // Get doctor and patient user IDs
+    const doctorUserId = appointment.doctor.user.id;
+    const patientUserId = appointment.patient.user.id;
+
+    // Get all messages for this appointment
+    const messages = await ChatMessage.findAll({
+      where: {
+        appointmentId: numericAppointmentId
+      },
+      order: [["createdAt", "ASC"]],
+      include: [
+        { model: User, as: "sender", attributes: ["id", "name", "image"] },
+        { model: User, as: "receiver", attributes: ["id", "name", "image"] }
+      ]
+    });
+
+    return res.status(200).json({
+      status: 1,
+      message: "Appointment chat history retrieved successfully",
+      data: {
+        appointment: {
+          id: appointment.id,
+          appointmentId: appointment.appointmentId,
+          appointmentDateTime: appointment.appointmentDateTime,
+          status: appointment.status,
+          doctor: {
+            id: doctorUserId,
+            name: appointment.doctor.user.name,
+            image: appointment.doctor.user.image
+          },
+          patient: {
+            id: patientUserId,
+            name: appointment.patient.user.name,
+            image: appointment.patient.user.image
+          }
+        },
+        messages: messages
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error fetching appointment chat history:", error);
+    return res.status(500).json({ 
+      status: 0, 
+      message: "Internal server error" 
+    });
+  }
+};
+
 // Get chat history with another user
 exports.getChatHistory = async (req, res) => {
   try {
@@ -19,44 +98,58 @@ exports.getChatHistory = async (req, res) => {
       });
     }
 
+    // Convert otherUserId to integer
+    const numericOtherUserId = parseInt(otherUserId, 10);
+
     // Check if patient has paid appointment with doctor
     if (req.user.role === "patient") {
-      const patient = await Patient.findOne({ where: { userId: currentUserId } });
-      console.log("Chat check - Patient:", patient?.id, "Doctor User ID:", otherUserId);
-      if (patient) {
-        // Get Doctor ID from User ID
-        const doctor = await Doctor.findOne({ where: { userId: otherUserId } });
-        console.log("Doctor found:", doctor?.id);
-        
-        if (!doctor) {
-          return res.status(403).json({
-            status: 0,
-            message: "Doctor not found"
-          });
-        }
-
-        const paidAppointment = await Appointment.findOne({
-          where: {
-            patientId: patient.id,
-            doctorId: doctor.id,
-            status: "paid"
+      // Check if receiver is admin - admin chat doesn't require payment
+      const receiverUser = await User.findByPk(numericOtherUserId);
+      if (receiverUser && receiverUser.role === "admin") {
+        // Allow admin chat without payment restriction - skip all checks
+        console.log("Chat with admin - no payment check required");
+      } else {
+        // Payment check for doctor chat
+        const patient = await Patient.findOne({ where: { userId: currentUserId } });
+        console.log("Chat check - Patient:", patient?.id, "Doctor User ID:", numericOtherUserId);
+        if (patient) {
+          // Get Doctor ID from User ID
+          const doctor = await Doctor.findOne({ where: { userId: numericOtherUserId } });
+          console.log("Doctor found:", doctor?.id);
+          
+          if (!doctor) {
+            return res.status(403).json({
+              status: 0,
+              message: "Doctor not found"
+            });
           }
-        });
-        console.log("Paid appointment found:", paidAppointment);
-        if (!paidAppointment) {
-          return res.status(403).json({
-            status: 0,
-            message: "You can only chat with doctors after completing payment"
+
+          const paidAppointment = await Appointment.findOne({
+            where: {
+              patientId: patient.id,
+              doctorId: doctor.id,
+              status: "paid"
+            }
           });
+          console.log("Paid appointment found:", paidAppointment);
+          if (!paidAppointment) {
+            return res.status(403).json({
+              status: 0,
+              message: "You can only chat with doctors after completing payment"
+            });
+          }
         }
       }
+    } else if (req.user.role === "admin") {
+      // Admin can chat with anyone without restrictions
+      console.log("Admin chat - no restrictions");
     }
 
     const { count, rows: messages } = await ChatMessage.findAndCountAll({
       where: {
         [Op.or]: [
-          { senderId: currentUserId, receiverId: otherUserId },
-          { senderId: otherUserId, receiverId: currentUserId }
+          { senderId: currentUserId, receiverId: numericOtherUserId },
+          { senderId: numericOtherUserId, receiverId: currentUserId }
         ]
       },
       order: [["createdAt", "DESC"]],
@@ -76,7 +169,7 @@ exports.getChatHistory = async (req, res) => {
       { isRead: true },
       {
         where: {
-          senderId: otherUserId,
+          senderId: numericOtherUserId,
           receiverId: currentUserId,
           isRead: false
         }
@@ -107,12 +200,133 @@ exports.getChatHistory = async (req, res) => {
 exports.getChatHistoryByAppointments = async (req, res) => {
   try {
     const currentUserId = req.user.id;
+    
     const { otherUserId } = req.params;
+    console.log("Other user ID:", otherUserId);
+    console.log("Current user ID:", currentUserId);
 
     if (!otherUserId) {
       return res.status(400).json({ 
         status: 0, 
         message: "Other User ID is required" 
+      });
+    }
+
+    // Convert otherUserId to integer
+    const numericOtherUserId = parseInt(otherUserId, 10);
+
+    // Check if either user is admin - admin chat doesn't require appointment logic
+    const receiverUser = await User.findByPk(numericOtherUserId);
+    const currentUser = await User.findByPk(currentUserId);
+    
+    if ((receiverUser && receiverUser.role === "admin") || (currentUser && currentUser.role === "admin")) {
+      console.log("Admin chat - no appointment grouping needed");
+      
+      // Fetch all messages between admin and patient
+      const messages = await ChatMessage.findAll({
+        where: {
+          [Op.or]: [
+            { senderId: currentUserId, receiverId: numericOtherUserId },
+            { senderId: numericOtherUserId, receiverId: currentUserId }
+          ]
+        },
+        order: [["createdAt", "ASC"]],
+        include: [
+          { model: User, as: "sender", attributes: ["id", "name", "image"] },
+          { model: User, as: "receiver", attributes: ["id", "name", "image"] }
+        ]
+      });
+
+      console.log("Messages found:", messages.length);
+      console.log("Query conditions:", {
+        currentUserId,
+        numericOtherUserId,
+        conditions: [
+          { senderId: currentUserId, receiverId: numericOtherUserId },
+          { senderId: numericOtherUserId, receiverId: currentUserId }
+        ]
+      });
+
+      // Mark messages as read
+      await ChatMessage.update(
+        { isRead: true },
+        {
+          where: {
+            senderId: numericOtherUserId,
+            receiverId: currentUserId,
+            isRead: false
+          }
+        }
+      );
+
+      // Return admin chat in same format but without appointment grouping
+      return res.status(200).json({
+        status: 1,
+        message: "Admin chat history retrieved successfully",
+        data: [
+          {
+            appointment: {
+              id: null,
+              appointmentId: "ADMIN_CHAT",
+              appointmentDateTime: new Date(),
+              status: "admin",
+              isCurrent: true
+            },
+            messages: messages
+          }
+        ]
+      });
+    }
+
+    // Check if current user is admin - admin chat doesn't require appointment logic
+    if (req.user.role === "admin") {
+      console.log("Admin fetching chat history with patient - no appointment grouping needed");
+      
+      // Fetch all messages between admin and patient
+      const messages = await ChatMessage.findAll({
+        where: {
+          [Op.or]: [
+            { senderId: currentUserId, receiverId: numericOtherUserId },
+            { senderId: numericOtherUserId, receiverId: currentUserId }
+          ]
+        },
+        order: [["createdAt", "ASC"]],
+        include: [
+          { model: User, as: "sender", attributes: ["id", "name", "image"] },
+          { model: User, as: "receiver", attributes: ["id", "name", "image"] }
+        ]
+      });
+
+      console.log("Messages found for admin chat:", messages.length);
+
+      // Mark messages as read
+      await ChatMessage.update(
+        { isRead: true },
+        {
+          where: {
+            senderId: numericOtherUserId,
+            receiverId: currentUserId,
+            isRead: false
+          }
+        }
+      );
+
+      // Return admin chat in same format but without appointment grouping
+      return res.status(200).json({
+        status: 1,
+        message: "Admin chat history retrieved successfully",
+        data: [
+          {
+            appointment: {
+              id: null,
+              appointmentId: "ADMIN_CHAT",
+              appointmentDateTime: new Date(),
+              status: "admin",
+              isCurrent: true
+            },
+            messages: messages
+          }
+        ]
       });
     }
 
@@ -124,7 +338,7 @@ exports.getChatHistoryByAppointments = async (req, res) => {
         return res.status(404).json({ status: 0, message: "Patient not found" });
       }
       patientId = patient.id;
-      const doctor = await Doctor.findOne({ where: { userId: otherUserId } });
+      const doctor = await Doctor.findOne({ where: { userId: numericOtherUserId } });
       if (!doctor) {
         return res.status(404).json({ status: 0, message: "Doctor not found" });
       }
@@ -135,7 +349,7 @@ exports.getChatHistoryByAppointments = async (req, res) => {
         return res.status(404).json({ status: 0, message: "Doctor not found" });
       }
       doctorId = doctor.id;
-      const patient = await Patient.findOne({ where: { userId: otherUserId } });
+      const patient = await Patient.findOne({ where: { userId: numericOtherUserId } });
       if (!patient) {
         return res.status(404).json({ status: 0, message: "Patient not found" });
       }
@@ -166,8 +380,8 @@ exports.getChatHistoryByAppointments = async (req, res) => {
           where: {
             appointmentId: appointment.id,
             [Op.or]: [
-              { senderId: currentUserId, receiverId: otherUserId },
-              { senderId: otherUserId, receiverId: currentUserId }
+              { senderId: currentUserId, receiverId: numericOtherUserId },
+              { senderId: numericOtherUserId, receiverId: currentUserId }
             ]
           },
           order: [["createdAt", "ASC"]],
@@ -198,8 +412,8 @@ exports.getChatHistoryByAppointments = async (req, res) => {
       where: {
         appointmentId: null,
         [Op.or]: [
-          { senderId: currentUserId, receiverId: otherUserId },
-          { senderId: otherUserId, receiverId: currentUserId }
+          { senderId: currentUserId, receiverId: numericOtherUserId },
+          { senderId: numericOtherUserId, receiverId: currentUserId }
         ]
       },
       order: [["createdAt", "ASC"]],
@@ -228,7 +442,7 @@ exports.getChatHistoryByAppointments = async (req, res) => {
       { isRead: true },
       {
         where: {
-          senderId: otherUserId,
+          senderId: numericOtherUserId,
           receiverId: currentUserId,
           isRead: false
         }
@@ -299,20 +513,47 @@ exports.getContacts = async (req, res) => {
           }
         });
       }
+    } else if (role === "admin") {
+      // Admin gets contacts from chat history (patients who have messaged admin)
+      const chatMessages = await ChatMessage.findAll({
+        where: {
+          [Op.or]: [{ senderId: currentUserId }, { receiverId: currentUserId }]
+        },
+        attributes: ["senderId", "receiverId"]
+      });
+
+      chatMessages.forEach(msg => {
+        if (msg.senderId !== currentUserId) contactUserIds.add(msg.senderId);
+        if (msg.receiverId !== currentUserId) contactUserIds.add(msg.receiverId);
+      });
     }
 
-    // 2. Get contacts from ChatMessage history (just in case they chatted but no appointment records are there)
-    const chatMessages = await ChatMessage.findAll({
-      where: {
-        [Op.or]: [{ senderId: currentUserId }, { receiverId: currentUserId }]
-      },
-      attributes: ["senderId", "receiverId"]
-    });
+    // 2. Add admin contacts for patients (support chat)
+    if (role === "patient") {
+      const admins = await User.findAll({
+        where: { role: "admin" },
+        attributes: ["id"]
+      });
+      admins.forEach(admin => {
+        contactUserIds.add(admin.id);
+      });
+    }
 
-    chatMessages.forEach(msg => {
-      if (msg.senderId !== currentUserId) contactUserIds.add(msg.senderId);
-      if (msg.receiverId !== currentUserId) contactUserIds.add(msg.receiverId);
-    });
+    // 3. Get contacts from ChatMessage history (just in case they chatted but no appointment records are there)
+    // Skip for admin since we already did this above
+    if (role !== "admin") {
+      const chatMessages = await ChatMessage.findAll({
+        where: {
+          [Op.or]: [{ senderId: currentUserId }, { receiverId: currentUserId }]
+        },
+        attributes: ["senderId", "receiverId"]
+      });
+
+      chatMessages.forEach(msg => {
+        if (msg.senderId !== currentUserId) contactUserIds.add(msg.senderId);
+        if (msg.receiverId !== currentUserId) contactUserIds.add(msg.receiverId);
+      });
+    }
 
     const contactIdsArray = Array.from(contactUserIds);
     if (contactIdsArray.length === 0) {
@@ -322,7 +563,7 @@ exports.getContacts = async (req, res) => {
       });
     }
 
-    // 3. Fetch user details for all contacts
+    // 4. Fetch user details for all contacts
     const contacts = await User.findAll({
       where: { id: contactIdsArray },
       attributes: ["id", "name", "email", "mobile", "role", "image"],
@@ -332,7 +573,7 @@ exports.getContacts = async (req, res) => {
       ]
     });
 
-    // 4. Fetch all last messages using a simpler approach
+    // 5. Fetch all last messages using a simpler approach
     // Get all messages and then filter for the latest per conversation
     const allMessages = await ChatMessage.findAll({
       where: {
@@ -354,7 +595,7 @@ exports.getContacts = async (req, res) => {
       }
     });
 
-    // 5. Fetch all unread counts in a single query
+    // 6. Fetch all unread counts in a single query
     const unreadCounts = await ChatMessage.findAll({
       where: {
         receiverId: currentUserId,
@@ -373,7 +614,7 @@ exports.getContacts = async (req, res) => {
       unreadCountMap[row.senderId] = parseInt(row.count);
     });
 
-    // 6. Format contacts with metadata
+    // 7. Format contacts with metadata
     const contactsWithMeta = contacts.map(contact => {
       const contactData = contact.toJSON();
 
@@ -400,15 +641,42 @@ exports.getContacts = async (req, res) => {
       };
     });
 
-    // Sort: contacts with messages first (by latest message time), then alphabetical order
-    contactsWithMeta.sort((a, b) => {
-      if (a.lastMessage && b.lastMessage) {
-        return new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt);
-      }
-      if (a.lastMessage) return -1;
-      if (b.lastMessage) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    // Sort: For patients, admins first, then contacts with messages (by latest message time), then alphabetical order
+    if (role === "patient") {
+      contactsWithMeta.sort((a, b) => {
+        // Admins always first
+        if (a.role === "admin" && b.role !== "admin") return -1;
+        if (b.role === "admin" && a.role !== "admin") return 1;
+        
+        // Then sort by message activity
+        if (a.lastMessage && b.lastMessage) {
+          return new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt);
+        }
+        if (a.lastMessage) return -1;
+        if (b.lastMessage) return 1;
+        return a.name.localeCompare(b.name);
+      });
+    } else if (role === "admin") {
+      // For admin, sort by most recent message activity first
+      contactsWithMeta.sort((a, b) => {
+        if (a.lastMessage && b.lastMessage) {
+          return new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt);
+        }
+        if (a.lastMessage) return -1;
+        if (b.lastMessage) return 1;
+        return a.name.localeCompare(b.name);
+      });
+    } else {
+      // For other roles, standard sorting
+      contactsWithMeta.sort((a, b) => {
+        if (a.lastMessage && b.lastMessage) {
+          return new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt);
+        }
+        if (a.lastMessage) return -1;
+        if (b.lastMessage) return 1;
+        return a.name.localeCompare(b.name);
+      });
+    }
 
     return res.status(200).json({
       status: 1,
@@ -437,7 +705,10 @@ exports.getContactById = async (req, res) => {
       });
     }
 
-    const contact = await User.findByPk(userId, {
+    // Convert userId to integer
+    const numericUserId = parseInt(userId, 10);
+
+    const contact = await User.findByPk(numericUserId, {
       attributes: ["id", "name", "email", "mobile", "role", "image"],
       include: [
         { model: Doctor, as: "doctorProfile", attributes: ["specialization", "qualification"] },
@@ -502,8 +773,11 @@ exports.editMessage = async (req, res) => {
       });
     }
 
+    // Convert messageId to integer
+    const numericMessageId = parseInt(messageId, 10);
+
     // Find the message
-    const chatMessage = await ChatMessage.findByPk(messageId);
+    const chatMessage = await ChatMessage.findByPk(numericMessageId);
 
     if (!chatMessage) {
       return res.status(404).json({
@@ -558,8 +832,11 @@ exports.deleteMessage = async (req, res) => {
       });
     }
 
+    // Convert messageId to integer
+    const numericMessageId = parseInt(messageId, 10);
+
     // Find the message
-    const chatMessage = await ChatMessage.findByPk(messageId);
+    const chatMessage = await ChatMessage.findByPk(numericMessageId);
 
     if (!chatMessage) {
       return res.status(404).json({
@@ -719,6 +996,9 @@ exports.getAppointmentContext = async (req, res) => {
       });
     }
 
+    // Convert otherUserId to integer
+    const numericOtherUserId = parseInt(otherUserId, 10);
+
     let appointment = null;
     const role = req.user.role;
 
@@ -728,7 +1008,7 @@ exports.getAppointmentContext = async (req, res) => {
         appointment = await Appointment.findOne({
           where: { 
             patientId: patient.id,
-            doctorId: otherUserId
+            doctorId: numericOtherUserId
           },
           include: [
             { model: Doctor, as: "doctor", include: [{ model: User, as: "user", attributes: ["id", "name", "image"] }] },
@@ -743,7 +1023,7 @@ exports.getAppointmentContext = async (req, res) => {
         appointment = await Appointment.findOne({
           where: { 
             doctorId: doctor.id,
-            patientId: otherUserId
+            patientId: numericOtherUserId
           },
           include: [
             { model: Doctor, as: "doctor", include: [{ model: User, as: "user", attributes: ["id", "name", "image"] }] },

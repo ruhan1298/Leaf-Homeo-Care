@@ -106,22 +106,6 @@ sequelize
   .sync({ alter: true })
   .then(() => {
     console.log("✅ Tables Synced");
-
-    // Start reminder cron job
-    const { runReminderChecks } = require('./services/reminder.service');
-
-    // Run every hour using setInterval (compatible with Node.js 16)
-    const REMINDER_INTERVAL = 2 * 60 * 1000; // 2 minute for testing
-
-    // Delay first run to avoid immediate execution on server start
-    setTimeout(() => {
-      setInterval(() => {
-        console.log('Running scheduled reminder checks...');
-        runReminderChecks();
-      }, REMINDER_INTERVAL);
-    }, REMINDER_INTERVAL);
-
-    console.log("✅ Reminder System Started (Every 2 Minutes for Testing)");
   })
   .catch(console.error);
 // error handler

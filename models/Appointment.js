@@ -68,6 +68,21 @@ const Appointment = sequelize.define(
     roomName:{
       type:DataTypes.STRING,
       allowNull:true 
+    },
+
+    shippingStatus: {
+      type: DataTypes.ENUM(
+        "draft",
+        "prepared",
+        "ready_to_transit",
+        "in_transit"
+      ),
+      defaultValue: "draft",
+    },
+
+    trackerId: {
+      type: DataTypes.STRING,
+      allowNull: true,
     }
   },
   {

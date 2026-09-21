@@ -14,4 +14,5 @@ router.post('/end-video-call', authMiddleware, appointmentController.EndVideoCal
 router.post('/appointment-details',authMiddleware, appointmentController.AppointmentDetails)
 router.post('/review',authMiddleware,appointmentController.Review)
 router.post('/submit-consultation', authMiddleware, appointmentController.SubmitConsultation)
+router.put('/update-shipping-status/:appointmentId', authMiddleware, appointmentController.updateShippingStatus)
 module.exports = router;
