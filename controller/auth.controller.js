@@ -1010,24 +1010,10 @@ exports.SendPhoneOTP = async (req, res) => {
     // Send OTP using Twilio Verify or fallback
     try {
       const verification = await twilioConfig.sendOTP(formattedMobile);
-      
-      // In development mode with fallback, show OTP in response
-      if (verification.otp && process.env.NODE_ENV === 'development') {
-        return res.status(200).json({
-          status: 1,
-          message: "OTP sent successfully (Development Mode)",
-          data: {
-            status: verification.status,
-            to: verification.to,
-            otp: verification.otp, // Only in development
-            formattedMobile: formattedMobile, // Send formatted number back to frontend
-          },
-        });
-      }
-      
+
       return res.status(200).json({
         status: 1,
-        message: "OTP sent successfully",
+        message: verification.otp && process.env.NODE_ENV === 'development' ? "OTP sent successfully (Development Mode)" : "OTP sent successfully",
         data: {
           status: verification.status,
           to: verification.to,

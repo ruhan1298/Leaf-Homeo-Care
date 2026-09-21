@@ -14,6 +14,8 @@ const Appointment = require("./models/Appointment");
 const Payment = require("./models/Payment");
 // const Prescription = require("./models/Prescription");
 const bodyParser = require("body-parser");
+const cron = require('node-cron');
+const reminderService = require('./services/reminder.service');
 
 require("./models");
 
@@ -29,6 +31,7 @@ var paymentRouter = require('./routes/payment');
 var chatRouter = require('./routes/chat');
 var blogRouter = require('./routes/blog');
 var couponRouter = require('./routes/coupon');
+var shippingRouter = require('./routes/shipping');
  const cors = require("cors");
 
 var app = express();
@@ -74,6 +77,7 @@ app.use('/api/v1/payment',paymentRouter);
 app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/blog', blogRouter);
 app.use('/api/v1', couponRouter);
+app.use('/api/v1/shipping', shippingRouter);
 
 // Multer error handler
 app.use((err, req, res, next) => {
@@ -108,6 +112,12 @@ sequelize
     console.log("✅ Tables Synced");
   })
   .catch(console.error);
+
+// Schedule reminder checks - run every hour using setInterval
+setInterval(async () => {
+  console.log('Running scheduled reminder checks...');
+  await reminderService.runReminderChecks();
+}, 60 * 60 * 1000); // Every hour
 // error handler
 app.use(function(err, req, res, next) {
   // set locals, only providing error in development

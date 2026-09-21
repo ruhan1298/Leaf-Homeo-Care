@@ -83,6 +83,21 @@ const Appointment = sequelize.define(
     trackerId: {
       type: DataTypes.STRING,
       allowNull: true,
+    },
+
+    shiprocketOrderId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    trackingUrl: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    courierName: {
+      type: DataTypes.STRING,
+      allowNull: true,
     }
   },
   {

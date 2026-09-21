@@ -5,26 +5,75 @@ class ShiprocketService {
     this.apiKey = process.env.SHIPROCKET_API_KEY;
     this.apiEmail = process.env.SHIPROCKET_API_EMAIL;
     this.apiUrl = process.env.SHIPROCKET_API_URL || 'https://apiv2.shiprocket.in';
-    this.enabled = !!(this.apiKey && this.apiEmail);
-    
+    this.pickupLocationId = process.env.SHIPROCKET_PICKUP_LOCATION_ID; // Must be "work"
+    this.enabled = !!(this.apiKey && this.apiEmail && this.pickupLocationId);
+    this.token = null;
+    this.tokenExpiry = null;
+
     console.log("Shiprocket Service initialized:", {
       hasApiKey: !!this.apiKey,
       hasApiEmail: !!this.apiEmail,
+      hasPickupLocationId: !!this.pickupLocationId,
       apiUrl: this.apiUrl,
       enabled: this.enabled
     });
   }
 
-  
   isEnabled() {
     return this.enabled;
   }
 
-  getAuthHeaders() {
+  async getAuthHeaders() {
+    if (this.token && this.tokenExpiry && Date.now() < this.tokenExpiry) {
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`
+      };
+    }
+
+    const isLoggedIn = await this.login();
+    if (!isLoggedIn) {
+      throw new Error("Shiprocket Authentication Failed");
+    }
+
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`
+      'Authorization': `Bearer ${this.token}`
     };
+  }
+
+  async login() {
+    try {
+      console.log("Shiprocket login attempt:", {
+        hasEmail: !!this.apiEmail,
+        hasApiKey: !!this.apiKey
+      });
+
+      const response = await axios.post(
+        `${this.apiUrl}/v1/external/auth/login`,
+        {
+          email: this.apiEmail,
+          password: this.apiKey
+        },
+        {
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+
+      if (response.data && response.data.token) {
+        this.token = response.data.token;
+        this.tokenExpiry = Date.now() + (24 * 60 * 60 * 1000); // 24 hours validity
+        console.log("Shiprocket login successful");
+        return true;
+      } else {
+        console.error("Shiprocket login failed: No token in response");
+        return false;
+      }
+    } catch (error) {
+      console.error("Shiprocket login error:", error.response?.data || error.message);
+      this.token = null;
+      return false;
+    }
   }
 
   async createOrder(orderData) {
@@ -34,31 +83,30 @@ class ShiprocketService {
     }
 
     try {
-      console.log("Creating Shiprocket order:", {
-        url: `${this.apiUrl}/v1/external/orders/create/adhoc`,
-        hasAuth: !!this.apiKey
-      });
-      
-      console.log("Order data:", JSON.stringify(orderData, null, 2));
-      
+      console.log("Creating Shiprocket order...");
+      const headers = await this.getAuthHeaders();
+
       const response = await axios.post(
         `${this.apiUrl}/v1/external/orders/create/adhoc`,
         orderData,
-        { headers: this.getAuthHeaders() }
+        { headers }
       );
 
       console.log("Shiprocket API response:", {
         status: response.status,
         dataStatus: response.data.status,
-        hasData: !!response.data.data
+        shipmentId: response.data.shipment_id,
+        orderId: response.data.order_id
       });
 
-      if (response.data.status === 1) {
+      // Shiprocket status 1 ya order_id presence check
+      if (response.data && (response.data.status === 1 || response.data.order_id)) {
         return {
           success: true,
-          data: response.data.data,
-          trackingId: response.data.data.awb_code,
-          orderId: response.data.data.order_id
+          data: response.data,
+          // Awb_code manual process me baad me aata h, isliye order_id / shipment_id return karenge
+          shipmentId: response.data.shipment_id,
+          orderId: response.data.order_id
         };
       } else {
         return {
@@ -81,14 +129,16 @@ class ShiprocketService {
     }
 
     try {
+      const headers = await this.getAuthHeaders();
+
       const response = await axios.get(
-        `${this.apiUrl}/courier/track/awb/${awbCode}`,
-        { headers: this.getAuthHeaders() }
+        `${this.apiUrl}/v1/external/courier/track/awb/${awbCode}`,
+        { headers }
       );
 
       return {
         success: true,
-        data: response.data.data
+        data: response.data
       };
     } catch (error) {
       console.error('Shiprocket tracking error:', error.response?.data || error.message);
@@ -100,49 +150,47 @@ class ShiprocketService {
   }
 
   formatOrderData(appointment, patientAddress) {
+    // Correct format: YYYY-MM-DD HH:mm
+    const formattedDate = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
     return {
       order_id: `ORD-${appointment.id}-${Date.now()}`,
-      order_date: new Date().toISOString().split('T')[0],
-      pickup_location: "123456", // Default pickup location ID - should be configured in Shiprocket
-      billing_customer_name: patientAddress.name,
+      order_date: formattedDate,
+      pickup_location: this.pickupLocationId, // Dashboard Address Nickname ("work")
+      
+      // Mandatory Customer Billing Details
+      billing_customer_name: patientAddress.name || "Patient",
       billing_last_name: "",
-      billing_address: patientAddress.addressLine1,
+      billing_address: patientAddress.addressLine1 || "Address Line 1",
       billing_address_2: patientAddress.addressLine2 || "",
-      billing_city: patientAddress.city,
-      billing_pincode: patientAddress.pincode,
-      billing_state: patientAddress.state,
+      billing_city: patientAddress.city || "Ahmedabad",
+      billing_pincode: patientAddress.pincode || "380001",
+      billing_state: patientAddress.state || "Gujarat",
       billing_country: patientAddress.country || "India",
-      billing_email: patientAddress.email,
-      billing_phone: patientAddress.mobile,
-      shipping_customer_name: patientAddress.name,
-      shipping_last_name: "",
-      shipping_address: patientAddress.addressLine1,
-      shipping_address_2: patientAddress.addressLine2 || "",
-      shipping_city: patientAddress.city,
-      shipping_pincode: patientAddress.pincode,
-      shipping_state: patientAddress.state,
-      shipping_country: patientAddress.country || "India",
-      shipping_email: patientAddress.email,
-      shipping_phone: patientAddress.mobile,
+      billing_email: patientAddress.email || "patient@example.com",
+      billing_phone: patientAddress.mobile || "9876543210",
+      shipping_is_billing: true,
+
       order_items: [
         {
-          name: "Homeopathy Medicine",
+          name: "Homoeopathic Medicine",
           sku: `MED-${appointment.id}`,
           units: 1,
-          selling_price: appointment.payment?.amount || 0,
+          selling_price: appointment.payment?.amount || 1,
           discount: 0,
           tax: 0,
-          hsn: 3004
+          hsn: 30049060
         }
       ],
       payment_method: "Prepaid",
-      sub_total: appointment.payment?.amount || 0,
-      length: 10,
-      breadth: 10,
-      height: 10,
-      weight: 0.5
+      sub_total: appointment.payment?.amount || 1,
+      length: 28,   // 11 inch = 28 cm
+  breadth: 13,  // 5 inch = 13 cm
+  height: 5,    // Default 5 cm
+  weight: 0.25  // 250 gram = 0.25 kg
     };
   }
 }
 
-module.exports = new ShiprocketService();
+const shiprocketService = new ShiprocketService();
+module.exports = shiprocketService;

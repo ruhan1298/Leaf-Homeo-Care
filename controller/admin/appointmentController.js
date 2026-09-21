@@ -80,6 +80,11 @@ exports.GetAppointments = async (req, res, next) => {
       requestType: appt.requestType,
       shippingStatus: appt.shippingStatus,
       trackerId: appt.trackerId,
+      shiprocketOrderId: appt.shiprocketOrderId,
+      trackingUrl: appt.trackingUrl,
+      courierName: appt.courierName,
+      shippingStatus: appt.shippingStatus,
+      trackerId: appt.trackerId,
       patient: appt.patient && appt.patient.user
         ? {
             id: appt.patient.id,

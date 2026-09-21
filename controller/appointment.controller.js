@@ -1014,17 +1014,10 @@ exports.updateShippingStatus = async (req, res) => {
 
     console.log("Update shipping status request:", { appointmentId, shippingStatus, trackerId });
 
-    if (!appointmentId) {
+    if (!appointmentId || !shippingStatus) {
       return res.status(400).json({
         status: 0,
-        message: "Appointment ID is required"
-      });
-    }
-
-    if (!shippingStatus) {
-      return res.status(400).json({
-        status: 0,
-        message: "Shipping status is required"
+        message: "Appointment ID and shipping status are required"
       });
     }
 
@@ -1045,8 +1038,6 @@ exports.updateShippingStatus = async (req, res) => {
       });
     }
 
-    console.log("Appointment found:", { id: appointment.id, currentStatus: appointment.shippingStatus });
-
     // Validate forward-only status transitions
     const statusFlow = {
       draft: ['prepared'],
@@ -1057,8 +1048,6 @@ exports.updateShippingStatus = async (req, res) => {
 
     const currentStatus = appointment.shippingStatus || 'draft';
     const allowedNextStatuses = statusFlow[currentStatus] || [];
-
-    console.log("Status validation:", { currentStatus, shippingStatus, allowedNextStatuses });
 
     if (!allowedNextStatuses.includes(shippingStatus)) {
       return res.status(400).json({
@@ -1074,7 +1063,6 @@ exports.updateShippingStatus = async (req, res) => {
       console.log("Creating Shiprocket order for appointment:", appointment.id);
       
       try {
-        // Get patient details using Sequelize ORM
         const patient = await Patient.findByPk(appointment.patientId, {
           include: [
             {
@@ -1100,18 +1088,19 @@ exports.updateShippingStatus = async (req, res) => {
         const orderData = shiprocketService.formatOrderData(appointment, patientAddress);
         const shiprocketResult = await shiprocketService.createOrder(orderData);
 
-        if (shiprocketResult.success && shiprocketResult.trackingId) {
-          updateData.trackerId = shiprocketResult.trackingId;
-          console.log("Shiprocket order created successfully. Tracking ID:", shiprocketResult.trackingId);
+        if (shiprocketResult.success && shiprocketResult.orderId) {
+          updateData.shiprocketOrderId = String(shiprocketResult.orderId);
+          console.log("Shiprocket order created successfully. Order ID:", shiprocketResult.orderId);
         } else {
           console.log("Shiprocket order creation failed:", shiprocketResult.message);
-          // Continue with status update even if Shiprocket fails
         }
       } catch (error) {
         console.error("Error in Shiprocket integration:", error);
-        // Continue with status update even if Shiprocket fails
       }
-    } else if (trackerId) {
+    }
+    
+    // Manual trackerId override
+    if (trackerId) {
       updateData.trackerId = trackerId;
     }
 
