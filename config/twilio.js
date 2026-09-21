@@ -27,7 +27,7 @@ module.exports = {
   isConfigured: isTwilioConfigured,
 
   sendOTP: async (to) => {
-    // Always generate and store local OTP as backup
+    // Always generate and store local OTP as backup for verification
     const otp = crypto.randomInt(100000, 999999).toString();
     const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
     otpStore.set(to, { otp, expiry });
@@ -44,11 +44,8 @@ module.exports = {
           });
         console.log(`Twilio OTP sent successfully to ${to}`);
 
-        // Return response with local OTP for testing
-        return {
-          ...response,
-          otp: otp // Always return local OTP for testing
-        };
+        // Return response without OTP
+        return response;
       } catch (error) {
         console.error("Twilio Send OTP Error:", error);
         // Fallback to local OTP generation if Twilio fails
@@ -57,8 +54,7 @@ module.exports = {
         return {
           status: "pending",
           to: to,
-          channel: "sms",
-          otp: otp
+          channel: "sms"
         };
       }
     } else {
@@ -68,15 +64,13 @@ module.exports = {
       return {
         status: "pending",
         to: to,
-        channel: "sms",
-        otp: otp
+        channel: "sms"
       };
     }
   },
 
   verifyOTP: async (to, code) => {
     console.log(`Verifying OTP for ${to} with code ${code}`);
-    console.log(`Current OTP Store keys:`, Array.from(otpStore.keys()));
 
     if (isTwilioConfigured && client) {
       try {

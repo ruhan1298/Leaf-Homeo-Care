@@ -1016,11 +1016,10 @@ exports.SendPhoneOTP = async (req, res) => {
 
       return res.status(200).json({
         status: 1,
-        message: verification.otp && process.env.NODE_ENV === 'development' ? "OTP sent successfully (Development Mode)" : "OTP sent successfully",
+        message: "OTP sent successfully",
         data: {
           status: verification.status,
           to: verification.to,
-          otp: verification.otp, // Only in development
           formattedMobile: formattedMobile, // Send formatted number back to frontend
         },
       });
