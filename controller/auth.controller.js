@@ -1010,6 +1010,7 @@ exports.SendPhoneOTP = async (req, res) => {
     // Send OTP using Twilio Verify or fallback
     try {
       const verification = await twilioConfig.sendOTP(formattedMobile);
+      console.log("Twilio Verify Response:", verification);
 
       return res.status(200).json({
         status: 1,
