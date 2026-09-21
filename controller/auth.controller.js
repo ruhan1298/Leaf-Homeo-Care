@@ -974,7 +974,6 @@ exports.UpdateFcmToken = async (req, res) => {
 
 exports.SendPhoneOTP = async (req, res) => {
   try {
-    console.log("NODE_ENV Check:", process.env.NODE_ENV);
     const { mobile } = req.body;
 
     if (!mobile) {
@@ -1011,8 +1010,6 @@ exports.SendPhoneOTP = async (req, res) => {
     // Send OTP using Twilio Verify or fallback
     try {
       const verification = await twilioConfig.sendOTP(formattedMobile);
-      console.log("Twilio Verify Response:", verification);
-      console.log("OTP value in response:", verification.otp);
 
       return res.status(200).json({
         status: 1,
