@@ -76,7 +76,8 @@ module.exports = {
 
   verifyOTP: async (to, code) => {
     console.log(`Verifying OTP for ${to} with code ${code}`);
-    
+    console.log(`Current OTP Store keys:`, Array.from(otpStore.keys()));
+
     if (isTwilioConfigured && client) {
       try {
         const response = await client.verify.v2
@@ -85,33 +86,37 @@ module.exports = {
             to,
             code,
           });
+        console.log("Twilio verification response:", response);
         return response;
       } catch (error) {
         console.error("Twilio Verify OTP Error:", error);
         // Fallback to local OTP verification if Twilio fails
         console.log("Falling back to local OTP verification due to Twilio error");
-        
+
         const storedData = otpStore.get(to);
         console.log(`Stored data for ${to}:`, storedData ? 'Found' : 'Not found');
-        
+        if (storedData) {
+          console.log(`Stored OTP: ${storedData.otp}, Expiry: ${new Date(storedData.expiry).toISOString()}`);
+        }
+
         if (!storedData) {
           console.log(`No OTP stored for ${to}`);
           return { status: "denied", valid: false };
         }
-        
+
         if (Date.now() > storedData.expiry) {
           console.log(`OTP expired for ${to}`);
           otpStore.delete(to);
           return { status: "expired", valid: false };
         }
-        
+
         console.log(`Comparing OTP: stored=${storedData.otp}, provided=${code}`);
         if (storedData.otp === code) {
           console.log(`OTP verified successfully for ${to}`);
           otpStore.delete(to);
           return { status: "approved", valid: true };
         }
-        
+
         console.log(`OTP mismatch for ${to}`);
         return { status: "denied", valid: false };
       }
@@ -120,25 +125,28 @@ module.exports = {
       console.log("Using local OTP verification (Twilio not configured)");
       const storedData = otpStore.get(to);
       console.log(`Stored data for ${to}:`, storedData ? 'Found' : 'Not found');
-      
+      if (storedData) {
+        console.log(`Stored OTP: ${storedData.otp}, Expiry: ${new Date(storedData.expiry).toISOString()}`);
+      }
+
       if (!storedData) {
         console.log(`No OTP stored for ${to}`);
         return { status: "denied", valid: false };
       }
-      
+
       if (Date.now() > storedData.expiry) {
         console.log(`OTP expired for ${to}`);
         otpStore.delete(to);
         return { status: "expired", valid: false };
       }
-      
+
       console.log(`Comparing OTP: stored=${storedData.otp}, provided=${code}`);
       if (storedData.otp === code) {
         console.log(`OTP verified successfully for ${to}`);
         otpStore.delete(to);
         return { status: "approved", valid: true };
       }
-      
+
       console.log(`OTP mismatch for ${to}`);
       return { status: "denied", valid: false };
     }
