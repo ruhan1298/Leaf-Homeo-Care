@@ -126,11 +126,7 @@ exports.AppointmentBooking = async (req, res, next) => {
     const patientId = patient.id;
 
     const { doctorId, requestType, appointmentDateTime, reason } = req.body;
-    console.log("=== BACKEND BOOKING DEBUG ===");
     console.log("Request Body:", req.body);
-    console.log("Received appointmentDateTime:", appointmentDateTime);
-    console.log("Type of appointmentDateTime:", typeof appointmentDateTime);
-    console.log("============================");
 
     if (!requestType || !appointmentDateTime) {
       return res.status(400).json({
