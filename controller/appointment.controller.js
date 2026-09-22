@@ -209,11 +209,15 @@ exports.AppointmentBooking = async (req, res, next) => {
       }
     }
 
+    // Convert IST to UTC for database storage
+    const appointmentDate = new Date(appointmentDateTime);
+    const utcDate = new Date(appointmentDate.getTime() - (5.5 * 60 * 60 * 1000)); // Subtract 5.5 hours for IST to UTC
+
     const appointment = await Appointment.create({
       patientId,
       doctorId: requestType === "specific_doctor" ? doctorId : null,
       requestType,
-      appointmentDateTime,
+      appointmentDateTime: utcDate,
       reason,
     });
 
