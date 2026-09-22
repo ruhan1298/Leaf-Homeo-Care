@@ -38,42 +38,89 @@ exports.AddAvailability = async (req, res) => {
 
     // Process each day's availability
     const availabilityData = [];
+    const skippedSlots = []; // Track skipped duplicates
+
     for (const item of availability) {
       if (!item.dayOfWeek || !item.slots || !Array.isArray(item.slots)) {
+        console.log("Skipping invalid item:", item);
         continue;
       }
 
-      // Delete existing slots for this day and doctor
-      await Availability.destroy({
-        where: {
-          doctorId: doctor.id,
-          dayOfWeek: item.dayOfWeek
-        }
-      });
+      // Check and create new slots (merge mode - no delete)
+      for (const slot of item.slots) {
+        try {
+          // Check if slot already exists
+          const existingSlot = await Availability.findOne({
+            where: {
+              doctorId: doctor.id,
+              dayOfWeek: item.dayOfWeek,
+              startTime: slot
+            }
+          });
 
-      // Create new slots
-      const slots = item.slots.map(slot => ({
-        doctorId: doctor.id,
-        dayOfWeek: item.dayOfWeek,
-        startTime: slot,
-        isAvailable: true
-      }));
-      availabilityData.push(...slots);
+          // Skip if already exists (avoid duplicates)
+          if (existingSlot) {
+            console.log(`Slot already exists: ${item.dayOfWeek} at ${slot}`);
+            skippedSlots.push(`${item.dayOfWeek} at ${slot}`);
+            continue;
+          }
+
+          // Create new slot
+          availabilityData.push({
+            doctorId: doctor.id,
+            dayOfWeek: item.dayOfWeek,
+            startTime: slot,
+            isAvailable: true
+          });
+        } catch (error) {
+          console.error("Error checking slot:", error);
+        }
+      }
+    }
+
+    console.log("Availability data to create:", availabilityData.length);
+    console.log("Skipped slots:", skippedSlots);
+
+    // Check if any new slots were actually added
+    if (availabilityData.length === 0) {
+      if (skippedSlots.length > 0) {
+        return res.status(400).json({
+          status: 0,
+          message: "All slots already exist. No new availability added.",
+          data: {
+            skippedSlots: skippedSlots
+          }
+        });
+      } else {
+        return res.status(400).json({
+          status: 0,
+          message: "No valid slots provided to add."
+        });
+      }
     }
 
     const result = await Availability.bulkCreate(availabilityData);
 
+    // Response with information about skipped duplicates
+    const responseMessage = skippedSlots.length > 0
+      ? `Availability added successfully (${skippedSlots.length} duplicate(s) skipped)`
+      : "Availability added successfully";
+
     return res.status(201).json({
       status: 1,
-      message: "Availability added successfully",
-      data: result
+      message: responseMessage,
+      data: result,
+      skippedSlots: skippedSlots.length > 0 ? skippedSlots : undefined
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("AddAvailability Error:", error);
+    console.error("Error details:", error.message);
+    console.error("Error stack:", error.stack);
     return res.status(500).json({
       status: 0,
-      message: "Something went wrong"
+      message: "Something went wrong",
+      error: error.message
     });
   }
 };
