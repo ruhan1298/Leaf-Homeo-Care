@@ -21,4 +21,3 @@ jobs:
             git reset --hard origin/main
             npm install
             pm2 restart leaf-homeo
-ye to mene aapko screenshot diya tha vaha se copy kiya old vali pehle hua tha uska
